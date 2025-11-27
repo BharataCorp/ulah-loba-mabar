@@ -53,7 +53,7 @@ if not upload_base_path:
 video_urls = []
 
 # ========================== HELPERS ==========================
-def send_callback(endpoint, payload):
+def send_callback(endpoint, payload, method="POST"):
     """Kirim callback ke API"""
     if not callback_url:
         return
@@ -67,8 +67,14 @@ def send_callback(endpoint, payload):
         headers["key"] = callback_api_key
 
     try:
-        r = requests.post(url, json=payload, headers=headers, timeout=30)
-        print(f"[CALLBACK:{endpoint}] {r.status_code} {r.text}")
+        if method.upper() == "POST":
+            r = requests.post(url, json=payload, headers=headers, timeout=30)
+            print(f"[CALLBACK POST :{endpoint}] {r.status_code} {r.text}")
+
+        elif method.upper() == "PUT":
+            r = requests.put(url, json=payload, headers=headers, timeout=30)
+            print(f"[CALLBACK PUT :{endpoint}] {r.status_code} {r.text}")
+
     except Exception as e:
         print(f"[ERROR] Callback {endpoint} failed:", e)
 
@@ -104,6 +110,14 @@ def ensure_duration(in_path, out_path, target_sec):
 
 # ========================== GPU CHECK ==========================
 def check_gpu():
+    send_callback('from_server_generate',{
+        "title": "Checking GPU",
+        "content" : "Memeriksa ketersediaan GPU untuk proses generate video.",
+        "data" : {
+            "status": "CHECKING_GPU"
+        }
+    })
+
     try:
         import torch
         if torch.cuda.is_available():
@@ -190,19 +204,23 @@ if not download_models_if_needed():
 
 # ========================== MAIN ==========================
 try:
-    send_callback("process", {
-        "status": "PREPARING_PROCESSING",
-        "generate_number": generate_number,
-        "total_prompts": len(prompts),
-        "upload_base_path": upload_base_path,
-        "target_duration": target_duration,
-        "wan_task": wan_task,
-        "wan_size": wan_size,
-        "ckpt_dir": ckpt_dir,
-        "project_dir": project_dir,
-        "public_base_url": public_base_url,
-        "s3_bucket": s3_bucket,
-        "date_path": date_path,
+    send_callback("from_server_generate", {
+        "title": "Starting Batch Generation",
+        "content": f"Memulai proses generate video untuk {len(prompts)} prompt.",
+        "data": {
+            "status": "STARTING_BATCH",
+            "generate_number": generate_number,
+            "total_prompts": len(prompts),
+            "upload_base_path": upload_base_path,
+            "target_duration": target_duration,
+            "wan_task": wan_task,
+            "wan_size": wan_size,
+            "ckpt_dir": ckpt_dir,
+            "project_dir": project_dir,
+            "public_base_url": public_base_url,
+            "s3_bucket": s3_bucket,
+            "date_path": date_path,
+        }
     })
 
     # --- Cari lokasi generate.py ---
@@ -250,16 +268,23 @@ try:
                 produced = os.path.join(generate_dir, "output.mp4")
         except Exception as e:
             print("[ERROR] generate.py failed:", e)
-            send_callback("fail", {
-                "status": "FAILED",
-                "type_error": "GENERATE_FAILED",
-                "failed_reason": str(e),
-                "current_index": idx,
-                "current_prompt": prompt,
-                "video_urls": video_urls
+            send_callback("from_server_generate", {
+                "title": "Generation Failed",
+                "content": f"Gagal generate video untuk prompt index {idx}.",
+                "data": {
+                    "order_index": idx,
+                    "prompt": prompt,
+                    "status": "FAILED",
+                    "type_error": "GENERATE_FAILED",
+                    "failed_reason": str(e),
+                    "current_index": idx,
+                    "current_prompt": prompt,
+                    "video_urls": video_urls
+                }
             })
             produced = tmp_out
             open(produced, "wb").write(b"DUMMY")
+            continue
 
         # --- DUMMY-SAFE FIX ---
         if os.environ.get("WAN_DUMMY") == "1":
@@ -289,29 +314,38 @@ try:
             video_urls.append(video_url)
             print(f"[INFO] Uploaded (public): {video_url}")
 
-            send_callback("upload", {
-                "status": "SUCCESS",
-                "current_index": idx,
-                "video_url": video_url,
-                "video_urls": video_urls,
+            send_callback("from_server_generate", {
+                "title": "Upload Successful",
+                "content": f"Video untuk prompt index {idx} berhasil di-upload.",
+                "data": {
+                    "order_index": idx,
+                    "prompt": prompt,
+                    "status": "UPLOADED",
+                    "video_url": video_url,
+                    "video_urls": video_urls,
+                }
             })
         except Exception as e:
             print("[ERROR] Upload failed:", e)
-            send_callback("upload", {
+            send_callback("from_server_generate", {
                 "status": "FAILED",
                 "failed_reason": str(e),
-                "current_index": idx,
+                "order_index": idx,
                 "video_url": "",
                 "video_urls": video_urls,
             })
 
         # --- PROGRESS ---
-        send_callback("progress", {
-            "status": "GENERATING",
-            "current_index": idx,
-            "current_prompt": prompt,
-            "current_url": video_url,
-            "video_urls": video_urls,
+        send_callback("from_server_generate", {
+            "title": "Generation In Progress",
+            "content": f"Sedang memproses prompt index {idx}.",
+            "data": {
+                "status": "GENERATING",
+                "order_index": idx,
+                "current_prompt": prompt,
+                "current_url": video_url,
+                "video_urls": video_urls,
+            }
         })
 
         time.sleep(3)
@@ -353,18 +387,26 @@ try:
     #         print("[WARN] Concat step failed:", e)
 
     # --- SUCCESS ---
-    send_callback("success", {
-        "status": "COMPLETED",
-        "video_urls": video_urls
+    send_callback("from_server_generate", {
+        "title": "Batch Generation Completed",
+        "content": "Proses generate video untuk semua prompt telah selesai.",
+        "data": {
+            "status": "COMPLETED",
+            "video_urls": video_urls
+        }
     })
 
 except Exception as e:
     print("[FATAL] Pipeline failed:", e)
-    send_callback("fail", {
-        "status": "FAILED",
-        "type_error": "FATAL_ERROR",
-        "failed_reason": str(e),
-        "video_urls": video_urls
+    send_callback("from_server_generate", {
+        "title": "Batch Generation Failed",
+        "content": "Proses generate video mengalami kegagalan fatal.",
+        "data": {
+            "status": "FAILED",
+            "type_error": "FATAL_ERROR",
+            "failed_reason": str(e),
+            "video_urls": video_urls
+        }
     })
     sys.exit(1)
 
