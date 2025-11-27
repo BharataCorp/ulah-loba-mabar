@@ -248,6 +248,16 @@ try:
 
     for idx, prompt in enumerate(prompts):
         print(f"[INFO] ({idx+1}/{len(prompts)}) Generating: {prompt}")
+        send_callback('from_server_generate',{
+            "title": "Starting Generation",
+            "content" : f"Memulai generate video untuk prompt index {idx}.",
+            "data" : {
+                "status": "STARTING_GENERATION",
+                "order_index": idx,
+                "prompt": prompt
+            }
+        })
+
         tmp_out = f"/tmp/{generate_number}_{idx}.mp4"
         final_out = f"/tmp/{generate_number}_{idx}_final.mp4"
         video_url = None
