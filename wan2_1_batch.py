@@ -11,14 +11,12 @@ upload_base_path = os.environ.get(
     f"video/{datetime.now().strftime('%Y/%m/%d')}/unknown"
 )
 
-# Upload destination S3
 s3_endpoint = os.environ.get("S3_ENDPOINT", "")
 s3_bucket = os.environ.get("S3_BUCKET", "")
 s3_access_key = os.environ.get("S3_ACCESS_KEY", "")
 s3_secret_key = os.environ.get("S3_SECRET_KEY", "")
 public_base_url = os.environ.get("PUBLIC_BASE_URL", "")
 
-# Model source S3 (HARUS BISA BERBEDA DARI UPLOAD)
 model_s3_endpoint = os.environ.get("MODEL_S3_ENDPOINT", "")
 model_s3_bucket = os.environ.get("MODEL_S3_BUCKET", "")
 model_s3_access_key = os.environ.get("MODEL_S3_ACCESS_KEY", "")
@@ -28,7 +26,7 @@ callback_url = os.environ.get("CALLBACK_URL", "")
 callback_api_key = os.environ.get("CALLBACK_API_KEY", "")
 
 project_dir = os.environ.get("PROJECT_DIR", "/root")
-wan_task = os.environ.get("WAN_TASK", "t2v-1.3B")         # FIXED
+wan_task = os.environ.get("WAN_TASK", "t2v-1.3B")
 wan_size = os.environ.get("WAN_SIZE", "832*480")
 ckpt_dir = os.environ.get("CKPT_DIR", "/models/Wan2.1-T2V-1.3B")
 
@@ -39,7 +37,13 @@ except Exception as e:
     print("[ERROR] Failed to decode PROMPTS_B64:", e)
     prompts = []
 
-# ========================== INIT S3 CLIENT (UPLOAD OUTPUT) ==========================
+# ============ SAFE TRUNCATE PROMPT (MAX 1800 CHAR) ============
+def truncate_prompt(text, limit=1800):
+    if len(text) <= limit:
+        return text
+    return text[:limit] + "...(truncated)"
+
+# ========================== INIT S3 CLIENT ==========================
 s3 = boto3.client(
     "s3",
     endpoint_url=f"https://{s3_endpoint}",
@@ -132,7 +136,7 @@ def check_gpu():
 
 check_gpu()
 
-# ========================== DOWNLOAD MODELS IF NEEDED ==========================
+# ========================== DOWNLOAD MODELS ==========================
 def download_models_if_needed():
     config_path = os.path.join(ckpt_dir, "config.json")
 
@@ -140,7 +144,7 @@ def download_models_if_needed():
         print(f"[INFO] Using existing model: {ckpt_dir}")
         return True
 
-    print(f"[INFO] Models not found → Download from model S3...")
+    print("[INFO] Models not found → Download from model S3...")
 
     try:
         model_s3 = boto3.client(
@@ -174,7 +178,6 @@ def download_models_if_needed():
         print("[ERROR] Failed download:", e)
         return False
 
-# ========================== INIT MODEL ==========================
 if not download_models_if_needed():
     send_callback("from_server_generate", {
         "title": "Model Download Failed",
@@ -194,7 +197,6 @@ try:
         }
     })
 
-    # where is generate.py
     candidates = [
         os.path.join(project_dir, "ulah-loba-mabar", "Wan2.1"),
     ]
@@ -202,11 +204,10 @@ try:
         (x for x in candidates if os.path.exists(os.path.join(x, "generate.py"))),
         None
     )
-
     if not generate_dir:
         raise FileNotFoundError("generate.py not found")
 
-    # Calculate frame_num N4+1
+    # frame_num N4+1
     def calc_frame_num(sec, fps=16):
         raw = int(round(fps * sec))
         return 4 * round((raw - 1) / 4) + 1
@@ -214,15 +215,18 @@ try:
     frame_num = calc_frame_num(target_duration)
     print(f"[INFO] frame_num={frame_num}")
 
-    # LOOP PROMPTS
-    for idx, prompt in enumerate(prompts):
+    # LOOP
+    for idx, raw_prompt in enumerate(prompts):
+
+        safe_prompt = truncate_prompt(raw_prompt)
+
         send_callback("from_server_generate", {
             "title": "Start Generate",
             "content": f"Mulai generate index {idx}",
             "data": {
                 "status": "STARTING_GENERATION",
                 "order_index": idx,
-                "prompt": prompt
+                "prompt": safe_prompt
             }
         })
 
@@ -235,13 +239,17 @@ try:
                 f"--task {wan_task} "
                 f"--size {wan_size} "
                 f"--ckpt_dir {ckpt_dir} "
-                f"--prompt {shlex.quote(prompt)} "
+                f"--prompt {shlex.quote(safe_prompt)} "
                 f"--frame_num {frame_num}"
             )
 
             subprocess.run(cmd, cwd=generate_dir, shell=True, check=True)
 
-            produced = tmp_out if os.path.exists(tmp_out) else os.path.join(generate_dir, "output.mp4")
+            produced = (
+                tmp_out
+                if os.path.exists(tmp_out)
+                else os.path.join(generate_dir, "output.mp4")
+            )
 
         except Exception as e:
             print("[ERROR] Generate failed:", e)
@@ -250,15 +258,14 @@ try:
                 "content": f"Gagal generate index {idx}",
                 "data": {
                     "status": "FAILED",
-                    "failed_reason": str(e),
-                    "order_index": idx
+                    "order_index": idx,
+                    "failed_reason": str(e)
                 }
             })
             continue
 
         ensure_duration(produced, final_out, target_duration)
 
-        # Upload
         s3_key = f"{upload_base_path}/{idx}.mp4"
 
         try:
@@ -293,7 +300,6 @@ try:
 
         time.sleep(1)
 
-    # FINAL SUCCESS
     send_callback("from_server_generate", {
         "title": "Completed",
         "content": "Batch selesai.",
