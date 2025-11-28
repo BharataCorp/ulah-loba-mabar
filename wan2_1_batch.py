@@ -138,14 +138,22 @@ check_gpu()
 
 # ========================== DOWNLOAD MODELS ==========================
 def download_models_if_needed():
-    config_path = os.path.join(ckpt_dir, "config.json")
-
-    if os.path.exists(config_path):
-        print(f"[INFO] Using existing model: {ckpt_dir}")
+    """
+    Download seluruh folder model dari S3 (recursive),
+    termasuk google/umt5-xxl dan assets, dll.
+    """
+    # Jika sudah ada minimal file wajib, skip
+    required = [
+        "config.json",
+        "diffusion_pytorch_model.safetensors",
+        "Wan2.1_VAE.pth",
+        "models_t5_umt5-xxl-enc-bf16.pth"
+    ]
+    if all(os.path.exists(os.path.join(ckpt_dir, f)) for f in required):
+        print(f"[INFO] Model folder already complete: {ckpt_dir}")
         return True
 
-    print("[INFO] Models not found → Download from model S3...")
-
+    print("[INFO] Downloading model recursively from S3...")
     try:
         model_s3 = boto3.client(
             "s3",
@@ -154,23 +162,25 @@ def download_models_if_needed():
             aws_secret_access_key=model_s3_secret_key
         )
 
-        model_root = "models/Wan2.1-T2V-1.3B"
-        files = [
-            "config.json",
-            "diffusion_pytorch_model.safetensors",
-            "Wan2.1_VAE.pth",
-            "models_t5_umt5-xxl-enc-bf16.pth",
-        ]
+        prefix = "models/Wan2.1-T2V-1.3B/"
+        paginator = model_s3.get_paginator("list_objects_v2")
 
         os.makedirs(ckpt_dir, exist_ok=True)
 
-        for f in files:
-            key = f"{model_root}/{f}"
-            dst = os.path.join(ckpt_dir, f)
+        for page in paginator.paginate(Bucket=model_s3_bucket, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                key = obj["Key"]
+                rel_path = key.replace(prefix, "")
+                dst_path = os.path.join(ckpt_dir, rel_path)
 
-            print(f"[DOWNLOAD] {f}...")
-            model_s3.download_file(model_s3_bucket, key, dst)
-            print(f"[OK] {f}")
+                if key.endswith("/"):
+                    continue
+
+                os.makedirs(os.path.dirname(dst_path), exist_ok=True)
+
+                print(f"[DOWNLOAD] {rel_path} ...")
+                model_s3.download_file(model_s3_bucket, key, dst_path)
+                print(f"[OK] {rel_path}")
 
         return True
 
