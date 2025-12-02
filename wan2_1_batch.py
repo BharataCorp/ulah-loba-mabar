@@ -3,6 +3,20 @@ import os, json, time, base64, subprocess, shlex, sys
 import boto3, requests
 from datetime import datetime
 
+# set message starting generate wan2_1 batch to log file to /var/log/wan2_1_batch.log to notice running system in background
+# ================= LOGGING =================
+LOG_PATH = "/var/log/wan2_1_batch.log"
+
+def write_log(msg):
+    try:
+        with open(LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}\n")
+    except Exception as e:
+        # kalau log bermasalah, tetap print ke stdout
+        print(f"ERROR LOGGING: {e} → message: {msg}")
+
+write_log("=== START wan2_1_batch process ===")
+
 # ========================== READ ENV ==========================
 generate_number = os.environ.get("GENERATE_NUMBER", "gv_unknown")
 target_duration = int(os.environ.get("TARGET_DURATION", "10"))
@@ -31,31 +45,6 @@ wan_size = os.environ.get("WAN_SIZE", "832*480")
 ckpt_dir = os.environ.get("CKPT_DIR", "/models/Wan2.1-T2V-1.3B")
 
 prompts_b64 = os.environ.get("PROMPTS_B64", "W10=")
-try:
-    prompts = json.loads(base64.b64decode(prompts_b64).decode("utf-8"))
-except Exception as e:
-    print("[ERROR] Failed to decode PROMPTS_B64:", e)
-    prompts = []
-
-# ============ SAFE TRUNCATE PROMPT (MAX 1800 CHAR) ============
-def truncate_prompt(text, limit=1800):
-    if len(text) <= limit:
-        return text
-    return text[:limit] + "...(truncated)"
-
-# ========================== INIT S3 CLIENT ==========================
-s3 = boto3.client(
-    "s3",
-    endpoint_url=f"https://{s3_endpoint}",
-    aws_access_key_id=s3_access_key,
-    aws_secret_access_key=s3_secret_key,
-)
-
-date_path = datetime.now().strftime("%Y/%m/%d")
-if not upload_base_path:
-    upload_base_path = f"video/{date_path}/{generate_number}"
-
-video_urls = []
 
 # ========================== HELPERS ==========================
 def send_callback(endpoint, payload, method="POST"):
@@ -79,6 +68,54 @@ def send_callback(endpoint, payload, method="POST"):
             print(f"[CALLBACK PUT:{endpoint}] {r.status_code} {r.text}")
     except Exception as e:
         print(f"[ERROR] Callback {endpoint} failed:", e)
+
+
+# send callback: starting
+send_callback("from_server_generate", {
+    "title": "Starting Batch",
+    "content": "Memulai proses batch.",
+    "data": {
+        "status": "STARTING_BATCH",
+        "generate_number": generate_number
+    }
+})
+
+try:
+    prompts = json.loads(base64.b64decode(prompts_b64).decode("utf-8"))
+except Exception as e:
+    print("[ERROR] Failed to decode PROMPTS_B64:", e)
+    prompts = []
+
+# ============ SAFE TRUNCATE PROMPT (MAX 1800 CHAR) ============
+def truncate_prompt(text, limit=1800):
+    if len(text) <= limit:
+        return text
+    return text[:limit] + "...(truncated)"
+
+# check if empty prompts or not a list
+if not isinstance(prompts, list) or len(prompts) == 0:
+    print("[ERROR] No prompts provided.")
+    send_callback("from_server_generate", {
+        "title": "No Prompts",
+        "content": "Tidak ada prompt yang diberikan.",
+        "data": {"status": "FAILED"}
+    })
+    sys.exit(1)
+
+# ========================== INIT S3 CLIENT ==========================
+s3 = boto3.client(
+    "s3",
+    endpoint_url=f"https://{s3_endpoint}",
+    aws_access_key_id=s3_access_key,
+    aws_secret_access_key=s3_secret_key,
+)
+
+date_path = datetime.now().strftime("%Y/%m/%d")
+if not upload_base_path:
+    upload_base_path = f"video/{date_path}/{generate_number}"
+
+video_urls = []
+
 
 def ensure_duration(in_path, out_path, target_sec):
     try:
