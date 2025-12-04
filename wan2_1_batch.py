@@ -82,6 +82,17 @@ send_callback("from_server_generate", {
 
 try:
     prompts = json.loads(base64.b64decode(prompts_b64).decode("utf-8"))
+
+    send_callback("from_server_generate", {
+        "title": "Prompts Loaded",
+        "content": f"Loaded {len(prompts)} prompts.",
+        "data": {
+            "status": "PROMPTS_LOADED",
+            "total_prompts": len(prompts),
+            "detail_prompts_json": prompts
+        }
+    })
+
 except Exception as e:
     print("[ERROR] Failed to decode PROMPTS_B64:", e)
     prompts = []
