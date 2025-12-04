@@ -281,12 +281,16 @@ try:
         final_out = f"/tmp/{generate_number}_{idx}_final.mp4"
 
         try:
+            prompt_file = f"/tmp/prompt_{idx}.txt"
+            with open(prompt_file, "w", encoding="utf-8") as fp:
+                fp.write(safe_prompt)
+
             cmd = (
                 f"python3 generate.py "
                 f"--task {wan_task} "
                 f"--size {wan_size} "
                 f"--ckpt_dir {ckpt_dir} "
-                f"--prompt {shlex.quote(safe_prompt)} "
+                f"--prompt_file {prompt_file} "
                 f"--frame_num {frame_num}"
             )
 
