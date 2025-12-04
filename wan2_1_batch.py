@@ -263,6 +263,7 @@ try:
     print(f"[INFO] frame_num={frame_num}")
 
     # LOOP
+    has_succeeded = False
     for idx, raw_prompt in enumerate(prompts):
 
         safe_prompt = truncate_prompt(raw_prompt)
@@ -308,7 +309,7 @@ try:
                 "title": "Generation Failed",
                 "content": f"Gagal generate index {idx}",
                 "data": {
-                    "status": "FAILED",
+                    "status": "GENERATE_FAILED",
                     "order_index": idx,
                     "failed_reason": str(e)
                 }
@@ -336,6 +337,7 @@ try:
                     "video_url": url
                 }
             })
+            has_succeeded = True
 
         except Exception as e:
             print("[ERROR] Upload failed:", e)
@@ -343,7 +345,7 @@ try:
                 "title": "Upload Failed",
                 "content": "Gagal upload",
                 "data": {
-                    "status": "FAILED",
+                    "status": "GENERATE_FAILED",
                     "order_index": idx,
                     "failed_reason": str(e)
                 }
@@ -351,14 +353,22 @@ try:
 
         time.sleep(1)
 
-    send_callback("from_server_generate", {
-        "title": "Completed",
-        "content": "Batch selesai.",
-        "data": {
-            "status": "COMPLETED",
-            "video_urls": video_urls
-        }
-    })
+    if not has_succeeded:
+        send_callback("from_server_generate", {
+            "title": "Batch Failed",
+            "content": "Semua generate gagal.",
+            "data": {"status": "FAILED"}
+        })
+        sys.exit(1)
+    else:
+        send_callback("from_server_generate", {
+            "title": "Completed",
+            "content": "Batch selesai.",
+            "data": {
+                "status": "COMPLETED",
+                "video_urls": video_urls
+            }
+        })
 
 except Exception as e:
     print("[FATAL]", e)
