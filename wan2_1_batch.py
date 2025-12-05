@@ -163,6 +163,20 @@ def ensure_duration(in_path, out_path, target_sec):
     else:
         subprocess.run(["cp", in_path, out_path], check=False)
 
+try:
+    import torch
+    import numpy as np
+except Exception as e:
+    send_callback("from_server_generate", {
+        "title": "Import Error",
+        "content": "Gagal import torch dan numpy",
+        "data": {
+            "status": "FAILED",
+            "failed_reason": str(e)
+        }
+    })
+    sys.exit(1)
+
 # ========================== GPU CHECK ==========================
 def check_gpu():
     send_callback("from_server_generate", {
@@ -173,14 +187,33 @@ def check_gpu():
 
     try:
         import torch
-        if torch.cuda.is_available():
+        if not torch.cuda.is_available():
+            msg = "GPU TIDAK TERDETEKSI"
+            print(f"[FATAL] {msg}")
+            send_callback("from_server_generate", {
+                "title": "GPU Not Found",
+                "content": msg,
+                "data": {
+                    "status": "FAILED",
+                    "failed_reason": msg
+                }
+            })
+            sys.exit(1)   # ← HENTIKAN
+        else:
             name = torch.cuda.get_device_name(0)
             vram = torch.cuda.get_device_properties(0).total_memory // (1024**3)
             print(f"[INFO] GPU Detected: {name} ({vram}GB)")
-        else:
-            print("[WARN] NO GPU FOUND")
+
     except Exception as e:
-        print("[ERROR] GPU check failed:", e)
+        send_callback("from_server_generate", {
+            "title": "GPU Check Failed",
+            "content": str(e),
+            "data": {
+                "status": "FAILED",
+                "failed_reason": str(e)
+            }
+        })
+        sys.exit(1)   # STOP
 
 check_gpu()
 
@@ -320,12 +353,12 @@ try:
                 "title": "Generation Failed",
                 "content": f"Gagal generate index {idx}",
                 "data": {
-                    "status": "GENERATE_FAILED",
+                    "status": "FAILED",
                     "order_index": idx,
                     "failed_reason": str(e)
                 }
             })
-            continue
+            sys.exit(1)
 
         ensure_duration(produced, final_out, target_duration)
 
