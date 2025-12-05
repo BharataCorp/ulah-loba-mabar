@@ -220,21 +220,44 @@ check_gpu()
 # ========================== DOWNLOAD MODELS ==========================
 def download_models_if_needed():
     """
-    Download seluruh folder model dari S3 (recursive),
-    termasuk google/umt5-xxl dan assets, dll.
+    Download seluruh folder model dari S3 (recursive)
+    dan pastikan file besar benar-benar selesai sebelum lanjut.
+    Fix bug boto3 suffix acak (misal: models.pth.Abc123)
     """
-    # Jika sudah ada minimal file wajib, skip
-    required = [
+    required_files = [
         "config.json",
         "diffusion_pytorch_model.safetensors",
         "Wan2.1_VAE.pth",
-        "models_t5_umt5-xxl-enc-bf16.pth"
+        "models_t5_umt5-xxl-enc-bf16.pth",
     ]
-    if all(os.path.exists(os.path.join(ckpt_dir, f)) for f in required):
+
+    # detect incomplete downloads
+    def fix_suffixes():
+        for rf in required_files:
+            original_path = os.path.join(ckpt_dir, rf)
+            # search temp suffix
+            candidates = [
+                f for f in os.listdir(ckpt_dir)
+                if f.startswith(rf) and f != rf
+            ]
+
+            if candidates:
+                # rename the latest file
+                candidates.sort(key=lambda x: os.path.getsize(os.path.join(ckpt_dir, x)))
+                latest = candidates[-1]
+                src = os.path.join(ckpt_dir, latest)
+
+                print(f"[FIX] Renaming temp model: {latest} -> {rf}")
+                os.rename(src, original_path)
+
+    # kalau sudah semua file ada, lanjut
+    if all(os.path.exists(os.path.join(ckpt_dir, f)) for f in required_files):
+        fix_suffixes()
         print(f"[INFO] Model folder already complete: {ckpt_dir}")
         return True
 
     print("[INFO] Downloading model recursively from S3...")
+
     try:
         model_s3 = boto3.client(
             "s3",
@@ -263,7 +286,23 @@ def download_models_if_needed():
                 model_s3.download_file(model_s3_bucket, key, dst_path)
                 print(f"[OK] {rel_path}")
 
-        return True
+        # wait until all required files exist
+        timeout = 900  # 15 minutes
+        start_time = time.time()
+
+        while True:
+            fix_suffixes()
+
+            if all(os.path.exists(os.path.join(ckpt_dir, f)) for f in required_files):
+                print("[OK] All required model files ready.")
+                return True
+
+            if time.time() - start_time > timeout:
+                print("[ERROR] Timeout waiting model files finish downloading.")
+                return False
+
+            print("[WAIT] Model still downloading...")
+            time.sleep(10)
 
     except Exception as e:
         print("[ERROR] Failed download:", e)
@@ -330,12 +369,15 @@ try:
             with open(prompt_file, "w", encoding="utf-8") as fp:
                 fp.write(safe_prompt)
 
+            # baca prompt
+            prompt_text = safe_prompt.replace('"', '\\"').strip()
+
             cmd = (
                 f"python3 generate.py "
                 f"--task {wan_task} "
                 f"--size {wan_size} "
                 f"--ckpt_dir {ckpt_dir} "
-                f"--prompt_file {prompt_file} "
+                f'--prompt "{prompt_text}" '
                 f"--frame_num {frame_num}"
             )
 
