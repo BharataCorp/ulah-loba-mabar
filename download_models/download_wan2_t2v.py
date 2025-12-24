@@ -7,7 +7,7 @@ ACCESS_KEY = os.environ["MODEL_S3_ACCESS_KEY"]
 SECRET_KEY = os.environ["MODEL_S3_SECRET_KEY"]
 
 PREFIX = "models/Wan2.2-T2V-A14B"
-DEST = "./Wan2.2-T2V-A14B"
+DEST = "/workspace/Wan2.2/Wan2.2-T2V-A14B"
 
 s3 = boto3.client(
     "s3",
