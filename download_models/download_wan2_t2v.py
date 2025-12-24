@@ -1,50 +1,38 @@
-import requests
+import boto3
 import os
-import xml.etree.ElementTree as ET
 
-ENDPOINT = "https://sgp1.vultrobjects.com"
-BUCKET = "mabar-app"
+MODEL_BUCKET = os.environ["MODEL_S3_BUCKET"]
+MODEL_ENDPOINT = os.environ["MODEL_S3_ENDPOINT"]
+ACCESS_KEY = os.environ["MODEL_S3_ACCESS_KEY"]
+SECRET_KEY = os.environ["MODEL_S3_SECRET_KEY"]
+
 PREFIX = "models/Wan2.2-T2V-A14B"
 DEST = "./Wan2.2-T2V-A14B"
 
-def list_objects():
-    url = f"{ENDPOINT}/{BUCKET}?prefix={PREFIX}/"
-    print("[LIST]", url)
-    r = requests.get(url)
-    r.raise_for_status()
-
-    root = ET.fromstring(r.text)
-    ns = {"s3": "http://s3.amazonaws.com/doc/2006-03-01/"}
-
-    files = []
-    for c in root.findall("s3:Contents", ns):
-        key = c.find("s3:Key", ns).text
-        if not key.endswith("/"):
-            files.append(key)
-
-    return files
+s3 = boto3.client(
+    "s3",
+    endpoint_url=f"https://{MODEL_ENDPOINT}",
+    aws_access_key_id=ACCESS_KEY,
+    aws_secret_access_key=SECRET_KEY,
+)
 
 def download_all():
+    paginator = s3.get_paginator("list_objects_v2")
     os.makedirs(DEST, exist_ok=True)
-    files = list_objects()
 
-    print(f"[INFO] Found {len(files)} files")
+    for page in paginator.paginate(Bucket=MODEL_BUCKET, Prefix=PREFIX):
+        for obj in page.get("Contents", []):
+            key = obj["Key"]
+            if key.endswith("/"):
+                continue
 
-    for key in files:
-        rel = key.replace(PREFIX + "/", "")
-        path = os.path.join(DEST, rel)
-        os.makedirs(os.path.dirname(path), exist_ok=True)
+            rel = key.replace(PREFIX + "/", "")
+            path = os.path.join(DEST, rel)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
 
-        url = f"{ENDPOINT}/{BUCKET}/{key}"
-        print("[DL]", url)
+            print("[DL]", key)
+            s3.download_file(MODEL_BUCKET, key, path)
 
-        with requests.get(url, stream=True) as r:
-            r.raise_for_status()
-            with open(path, "wb") as f:
-                for chunk in r.iter_content(1024 * 1024):
-                    f.write(chunk)
+    print("ALL FILES DOWNLOADED")
 
-    print("DONE")
-
-if __name__ == "__main__":
-    download_all()
+download_all()
