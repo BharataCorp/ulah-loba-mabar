@@ -5,9 +5,10 @@ MODEL_BUCKET = os.environ["MODEL_S3_BUCKET"]
 MODEL_ENDPOINT = os.environ["MODEL_S3_ENDPOINT"]
 ACCESS_KEY = os.environ["MODEL_S3_ACCESS_KEY"]
 SECRET_KEY = os.environ["MODEL_S3_SECRET_KEY"]
+MODEL_FOLDER = os.environ["MODEL_FOLDER"]
 
-PREFIX = "models/Wan2.2-T2V-A14B"
-DEST = "/workspace/Wan2.2/Wan2.2-T2V-A14B"
+PREFIX = "models/" + MODEL_FOLDER
+DEST = "/workspace/Wan2.2/" + MODEL_FOLDER
 
 s3 = boto3.client(
     "s3",
