@@ -1,57 +1,50 @@
-import boto3
-import os
 import requests
+import os
+import xml.etree.ElementTree as ET
 
-# =========================
-# CONFIG
-# =========================
-BUCKET_NAME = "mabar-app"
-PREFIX = "models/Wan2.2-T2V-A14B"
 ENDPOINT = "https://sgp1.vultrobjects.com"
+BUCKET = "mabar-app"
+PREFIX = "models/Wan2.2-T2V-A14B"
+DEST = "./Wan2.2-T2V-A14B"
 
-# =========================
-# INIT S3 CLIENT (PUBLIC)
-# =========================
-s3 = boto3.client(
-    "s3",
-    endpoint_url=ENDPOINT,
-    aws_access_key_id="",
-    aws_secret_access_key="",
-)
+def list_objects():
+    url = f"{ENDPOINT}/{BUCKET}?prefix={PREFIX}/"
+    print("[LIST]", url)
+    r = requests.get(url)
+    r.raise_for_status()
 
-# =========================
-# LIST ALL OBJECTS
-# =========================
-print(f"Listing objects in s3://{BUCKET_NAME}/{PREFIX} ...")
+    root = ET.fromstring(r.text)
+    ns = {"s3": "http://s3.amazonaws.com/doc/2006-03-01/"}
 
-objects = s3.list_objects_v2(Bucket=BUCKET_NAME, Prefix=PREFIX)
+    files = []
+    for c in root.findall("s3:Contents", ns):
+        key = c.find("s3:Key", ns).text
+        if not key.endswith("/"):
+            files.append(key)
 
-if "Contents" not in objects:
-    print("No objects found. Check prefix or permissions.")
-    exit()
+    return files
 
-# =========================
-# DOWNLOAD ALL FILES
-# =========================
-for obj in objects["Contents"]:
-    key = obj["Key"]
-    if key.endswith("/"):  # skip directory markers
-        continue
+def download_all():
+    os.makedirs(DEST, exist_ok=True)
+    files = list_objects()
 
-    relative_path = key[len(PREFIX) + 1:]  # remove prefix from path
+    print(f"[INFO] Found {len(files)} files")
 
-    local_path = f"./workspace/Wan2.2/Wan2.2-T2V-A14B/{relative_path}"
-    os.makedirs(os.path.dirname(local_path), exist_ok=True)
+    for key in files:
+        rel = key.replace(PREFIX + "/", "")
+        path = os.path.join(DEST, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
 
-    file_url = f"{ENDPOINT}/{BUCKET_NAME}/{key}"
+        url = f"{ENDPOINT}/{BUCKET}/{key}"
+        print("[DL]", url)
 
-    print(f"Downloading: {file_url} → {local_path}")
+        with requests.get(url, stream=True) as r:
+            r.raise_for_status()
+            with open(path, "wb") as f:
+                for chunk in r.iter_content(1024 * 1024):
+                    f.write(chunk)
 
-    # stream download
-    with requests.get(file_url, stream=True) as r:
-        r.raise_for_status()
-        with open(local_path, "wb") as f:
-            for chunk in r.iter_content(chunk_size=8192):
-                f.write(chunk)
+    print("DONE")
 
-print("\nDone! All files downloaded successfully.")
+if __name__ == "__main__":
+    download_all()
