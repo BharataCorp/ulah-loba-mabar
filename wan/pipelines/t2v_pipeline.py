@@ -93,9 +93,13 @@ class T2VPipeline:
                 "--task", "t2v-A14B",
                 "--ckpt_dir", config.MODEL_DIRS["t2v"],
                 "--prompt", prompt_text,
+                "--offload_model", True,
+                "--convert_model_dtype",
                 "--size", size,
+                "--t5_cpu"
                 "--frame_num", str(frame_num),
                 "--sample_steps", str(sample_steps),
+                "--sample_shift", "10",
                 "--save_file", part_path,
             ]
 
