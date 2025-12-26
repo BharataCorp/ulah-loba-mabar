@@ -1,12 +1,12 @@
 # wan/pipelines/t2v_pipeline.py
 """
-WAN 2.2 Text-to-Video Pipeline (FINAL - Chunked)
-===============================================
+WAN 2.2 Text-to-Video Pipeline (FINAL - Optimized & Chunked)
+===========================================================
 
 Design:
 - Native WAN generate.py execution
 - VRAM-safe chunking (n × 4 + 1 frames)
-- No Diffusers misuse
+- GPU auto-optimization (TF32)
 - Suitable for RunPod / daemon workers
 """
 
@@ -21,6 +21,10 @@ from wan import config
 from wan.utils.wan_chunker import (
     split_duration_to_chunks,
     seconds_to_wan_frames,
+)
+from wan.utils.gpu_profile import (
+    detect_gpu_profile,
+    apply_global_optimizations,
 )
 
 _logger = get_logger("WAN.T2V")
@@ -40,6 +44,15 @@ class T2VPipeline:
         sample_steps: int | None = None,
         output_path: str | None = None,
     ) -> str:
+
+        # --------------------------------------------------
+        # GPU AUTO OPTIMIZATION (ONCE)
+        # --------------------------------------------------
+        profile = detect_gpu_profile()
+        apply_global_optimizations(profile)
+
+        _logger.info(f"GPU profile detected: {profile}")
+
         # --------------------------------------------------
         # Validate input
         # --------------------------------------------------
@@ -103,7 +116,10 @@ class T2VPipeline:
                 "--save_file", part_path,
             ]
 
-            _logger.info(f"T2V chunk {idx + 1}: {sec}s ({frame_num} frames)")
+            _logger.info(
+                f"T2V chunk {idx + 1}: {sec}s "
+                f"({frame_num} frames)"
+            )
             _logger.info(" ".join(cmd))
 
             subprocess.run(
