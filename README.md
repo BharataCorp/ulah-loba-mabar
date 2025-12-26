@@ -40,12 +40,12 @@ export PROMPTS='["prompt 1", "prompt 2"]'
 *_Note:_*
 > Before running the script, make sure to set the required environment variables as shown below.
 > ```bash
-> export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-> export CUDA_VISIBLE_DEVICES=0
-> # CPU throttle (WAJIB untuk stabilitas)
-> export OMP_NUM_THREADS=6
-> export MKL_NUM_THREADS=6
-> export NUMEXPR_NUM_THREADS=6
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export CUDA_VISIBLE_DEVICES=0
+# CPU throttle (WAJIB untuk stabilitas)
+export OMP_NUM_THREADS=6
+export MKL_NUM_THREADS=6
+export NUMEXPR_NUM_THREADS=6
 > ```
 
 ### WAN Usage Pipeline Generate
