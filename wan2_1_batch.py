@@ -69,7 +69,6 @@ def send_callback(endpoint, payload, method="POST"):
     except Exception as e:
         print(f"[ERROR] Callback {endpoint} failed:", e)
 
-
 # send callback: starting
 send_callback("from_server_generate", {
     "title": "Starting Batch",
