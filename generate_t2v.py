@@ -1,47 +1,17 @@
 #!/usr/bin/env python3
-"""
-CLI Wrapper for WAN 2.2 T2V (Manual Test)
-========================================
-"""
 
 import argparse
 from wan.pipelines.t2v_pipeline import T2VPipeline
 
 
 def main():
-    parser = argparse.ArgumentParser("WAN 2.2 T2V Generator")
+    parser = argparse.ArgumentParser("WAN 2.2 T2V CLI")
 
-    parser.add_argument(
-        "--prompt",
-        required=True,
-        help="Text prompt or JSON string",
-    )
-
-    parser.add_argument(
-        "--target_duration",
-        type=int,
-        required=True,
-        help="Target duration in seconds",
-    )
-
-    parser.add_argument(
-        "--size",
-        default=None,
-        help="Resolution, e.g. 832*480",
-    )
-
-    parser.add_argument(
-        "--sample_steps",
-        type=int,
-        default=None,
-        help="Diffusion steps (optional)",
-    )
-
-    parser.add_argument(
-        "--output",
-        default=None,
-        help="Output mp4 path",
-    )
+    parser.add_argument("--prompt", required=True)
+    parser.add_argument("--target_duration", type=int, required=True)
+    parser.add_argument("--size", default=None)
+    parser.add_argument("--sample_steps", type=int, default=None)
+    parser.add_argument("--output", default=None)
 
     args = parser.parse_args()
 
@@ -53,7 +23,7 @@ def main():
         output_path=args.output,
     )
 
-    print("\n=== GENERATION COMPLETE ===")
+    print("\n✅ DONE")
     print("Output:", output)
 
 
