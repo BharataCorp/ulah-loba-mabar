@@ -4,8 +4,9 @@ import time
 import json
 import logging
 from pathlib import Path
+from types import SimpleNamespace
 
-from generate import generate, _parse_args
+from generate import generate
 
 BASE_DIR = "/workspace/Wan2.2"
 QUEUE_DIR = f"{BASE_DIR}/job_queue"
@@ -22,9 +23,44 @@ logging.basicConfig(
     format="[DAEMON] %(message)s"
 )
 
+
 def load_job(path):
     with open(path) as f:
         return json.load(f)
+
+
+def build_args_from_job(job: dict):
+    """
+    Build args object manually (NO argparse)
+    """
+    return SimpleNamespace(
+        # REQUIRED
+        task="t2v-A14B",
+        ckpt_dir=job["ckpt_dir"],
+        prompt=job["prompt"],
+        size=job["size"],
+        frame_num=job["frame_num"],
+        save_file=job["output"],
+
+        # SAMPLING
+        sample_steps=job.get("sample_steps", 25),
+        sample_shift=10,
+        sample_solver="unipc",
+        sample_guide_scale=None,
+
+        # MODEL FLAGS
+        offload_model=True,
+        convert_model_dtype=True,
+        t5_cpu=True,
+        t5_fsdp=False,
+        dit_fsdp=False,
+        ulysses_size=1,
+
+        # OTHER
+        base_seed=-1,
+        image=None,
+    )
+
 
 def main():
     logging.info("Starting WAN daemon worker")
@@ -47,19 +83,9 @@ def main():
         try:
             job = load_job(running_path)
 
-            args = _parse_args()
-            args.task = "t2v-A14B"
-            args.ckpt_dir = job["ckpt_dir"]
-            args.prompt = job["prompt"]
-            args.size = job["size"]
-            args.frame_num = job["frame_num"]
-            args.sample_steps = job["sample_steps"]
-            args.sample_shift = 10
-            args.save_file = job["output"]
-            args.offload_model = True
-            args.convert_model_dtype = True
-            args.t5_cpu = True
+            args = build_args_from_job(job)
 
+            logging.info("Generating video...")
             generate(args)
 
             done_path = f"{DONE}/{job_name}"
@@ -67,8 +93,9 @@ def main():
             logging.info(f"Job done → {job['output']}")
 
         except Exception as e:
-            logging.error(f"Job failed: {e}")
+            logging.exception("Job failed")
             os.rename(running_path, f"{DONE}/{job_name}.failed")
+
 
 if __name__ == "__main__":
     main()
