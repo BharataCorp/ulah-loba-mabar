@@ -96,7 +96,7 @@ class T2VPipeline:
                 "--offload_model", "True",
                 "--convert_model_dtype",
                 "--size", size,
-                "--t5_cpu"
+                "--t5_cpu",
                 "--frame_num", str(frame_num),
                 "--sample_steps", str(sample_steps),
                 "--sample_shift", "10",
