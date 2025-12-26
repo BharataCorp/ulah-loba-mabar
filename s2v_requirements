@@ -1,0 +1,9 @@
+-r pod_requirements.txt
+
+# ===============================
+# AUDIO / SPEECH
+# ===============================
+
+soundfile>=0.12.1
+librosa>=0.10.1
+scipy>=1.11.4

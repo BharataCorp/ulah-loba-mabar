@@ -1,0 +1,14 @@
+# ===============================
+# POD BASE REQUIREMENTS
+# (Non-GPU, Non-AI Core)
+# ===============================
+
+requests>=2.31.0
+boto3>=1.34.0
+python-dotenv>=1.0.1
+
+# logging & validation
+pydantic>=2.7.0
+
+# utils
+tqdm>=4.66.0
