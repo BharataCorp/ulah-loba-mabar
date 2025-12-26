@@ -67,7 +67,6 @@ def main():
         target_duration=args.target_duration,
         size=args.size,
         sample_steps=args.sample_steps,
-        sample_shift=args.sample_shift,
         output_path=args.output,
     )
 
