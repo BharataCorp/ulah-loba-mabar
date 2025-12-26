@@ -1,76 +1,68 @@
 """
-WAN 2.2 Text-to-Video Pipeline (FINAL)
-=====================================
+WAN 2.2 Text-to-Video Pipeline (NATIVE)
+======================================
 
-Design goals:
-- Load WAN 2.2 T2V model ONCE (persistent pipeline)
-- Safe for long-running daemon (RunPod / GPU worker)
-- Supports string prompt OR structured JSON prompt
-- Supports target_duration (seconds → frames)
-- Strict Diffusers API usage (no hidden / invalid args)
+- Native WAN 2.2 (NO Diffusers)
+- Model loaded ONCE (persistent)
+- Safe for RunPod long-running worker
+- Supports string or JSON prompt
+- target_duration (seconds → frame_num)
 """
 
 from __future__ import annotations
 
 import os
-import json
 from typing import Union, Dict, Any
 
 import torch
-import imageio.v3 as iio
-from diffusers import DiffusionPipeline
 
-from wan.pipelines.base_pipeline import BasePipeline
 from wan.logger import get_logger
 from wan import config
+from wan.pipelines.base_pipeline import BasePipeline
+
+# WAN native imports (OFFICIAL)
+from wan.text2video import WanT2V
+from wan.configs import load_config
 
 _logger = get_logger("WAN.T2V")
 
 
 class T2VPipeline(BasePipeline):
     """
-    WAN 2.2 Text-to-Video Pipeline (Diffusers-based)
+    WAN 2.2 Native Text-to-Video Pipeline
     """
 
     # ==========================================================
-    # INTERNAL: PIPELINE LOADER
+    # INTERNAL: LOAD PIPELINE (ONCE)
     # ==========================================================
 
     @classmethod
-    def _load_pipeline(cls) -> DiffusionPipeline:
-        """
-        Load WAN 2.2 T2V pipeline from local directory.
-
-        This method is called ONCE and cached by BasePipeline.
-        """
+    def _load_pipeline(cls) -> WanT2V:
         model_dir = config.MODEL_DIRS.get("t2v")
-
         if not model_dir:
-            raise RuntimeError("MODEL_DIRS['t2v'] is not configured")
+            raise RuntimeError("MODEL_DIRS['t2v'] not configured")
 
         if not os.path.isdir(model_dir):
-            raise FileNotFoundError(
-                f"[WAN T2V] Model directory not found: {model_dir}"
-            )
+            raise FileNotFoundError(f"T2V model dir not found: {model_dir}")
 
-        _logger.info(f"Loading WAN 2.2 T2V model from: {model_dir}")
+        _logger.info(f"Loading WAN 2.2 T2V from {model_dir}")
 
-        pipe = DiffusionPipeline.from_pretrained(
-            model_dir,
-            torch_dtype=torch.bfloat16,
-            local_files_only=True,
+        # Load WAN config (OFFICIAL METHOD)
+        cfg = load_config(
+            task="t2v-A14B",
+            size=config.DEFAULT_SIZE,
         )
 
-        # ---- device placement ----
-        if config.USE_OFFLOAD:
-            _logger.info("Enabling CPU offload for WAN T2V")
-            pipe.enable_model_cpu_offload()
-        else:
-            if torch.cuda.is_available():
-                pipe = pipe.to("cuda")
+        device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        pipe.set_progress_bar_config(disable=False)
+        pipe = WanT2V(
+            config=cfg,
+            ckpt_dir=model_dir,
+            device=device,
+            offload=config.USE_OFFLOAD,
+        )
 
+        _logger.info("WAN 2.2 T2V pipeline loaded successfully")
         return pipe
 
     # ==========================================================
@@ -87,60 +79,37 @@ class T2VPipeline(BasePipeline):
         output_path: str | None = None,
     ) -> str:
         """
-        Generate video from text prompt.
-
-        Args:
-            prompt:
-                - string prompt
-                - OR structured JSON prompt
-            target_duration:
-                target video duration in seconds
-            size:
-                resolution string, e.g. "832*480"
-            sample_steps:
-                diffusion inference steps
-            output_path:
-                final mp4 path
+        Generate T2V video using WAN native engine.
 
         Returns:
-            Absolute path to generated video file
+            output mp4 path
         """
 
-        # ---- ensure pipeline is loaded ----
         cls.load()
 
-        # ---- normalize prompt ----
         prompt_text = cls._normalize_prompt(prompt)
-
         if not prompt_text:
-            raise ValueError("Prompt text is empty after normalization")
+            raise ValueError("Prompt is empty")
 
-        # ---- duration validation ----
         if target_duration <= 0:
-            raise ValueError("target_duration must be > 0 seconds")
+            raise ValueError("target_duration must be > 0")
 
         if target_duration > config.MAX_DURATION_SECONDS:
             raise ValueError(
-                f"target_duration exceeds limit "
-                f"({config.MAX_DURATION_SECONDS}s)"
+                f"target_duration exceeds limit ({config.MAX_DURATION_SECONDS}s)"
             )
 
         frame_num = config.seconds_to_frames(target_duration)
 
-        # ---- resolution handling ----
         size = size or config.DEFAULT_SIZE
         config.validate_size(size)
 
-        width, height = map(int, size.split("*"))
-
-        # ---- inference params ----
         sample_steps = sample_steps or config.DEFAULT_SAMPLE_STEPS
 
         output_path = (
             output_path
             or cls._default_output_path(prompt_text, size)
         )
-
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
         _logger.info(
@@ -148,97 +117,56 @@ class T2VPipeline(BasePipeline):
             f"frames={frame_num} size={size} steps={sample_steps}"
         )
 
-        # ---- inference ----
-        with torch.no_grad():
-            result = cls._pipeline(
-                prompt=prompt_text,
-                num_frames=frame_num,
-                height=height,
-                width=width,
-                num_inference_steps=sample_steps,
-            )
-
-        if not hasattr(result, "frames"):
-            raise RuntimeError("Pipeline output does not contain frames")
-
-        frames = result.frames
-
-        # ---- save video ----
-        cls._save_video(
-            frames=frames,
-            output_path=output_path,
-            fps=config.DEFAULT_FPS,
+        # ==========================
+        # WAN NATIVE GENERATION
+        # ==========================
+        video_path = cls._pipeline.generate(
+            prompt=prompt_text,
+            frame_num=frame_num,
+            sample_steps=sample_steps,
+            save_file=output_path,
         )
 
-        _logger.info(f"T2V video saved: {output_path}")
-
-        return output_path
+        _logger.info(f"T2V video saved: {video_path}")
+        return video_path
 
     # ==========================================================
-    # INTERNAL HELPERS
+    # HELPERS
     # ==========================================================
 
     @staticmethod
     def _normalize_prompt(
         prompt: Union[str, Dict[str, Any]]
     ) -> str:
-        """
-        Convert structured JSON prompt into WAN-friendly text.
-        """
         if isinstance(prompt, str):
             return prompt.strip()
 
         if isinstance(prompt, dict):
-            # preferred explicit field
             if "prompt_for_wan_one_t2v" in prompt:
                 return str(prompt["prompt_for_wan_one_t2v"]).strip()
 
-            # fallback: scene-based description
             scenes = prompt.get("scenes", [])
-            texts: list[str] = []
-
-            for scene in scenes:
-                actions = ", ".join(scene.get("actions", []))
-                mood = scene.get("mood", "")
-                setting = scene.get("setting", "")
-                texts.append(
+            parts = []
+            for s in scenes:
+                actions = ", ".join(s.get("actions", []))
+                mood = s.get("mood", "")
+                setting = s.get("setting", "")
+                parts.append(
                     f"{actions}. Setting: {setting}. Mood: {mood}."
                 )
+            return " ".join(parts).strip()
 
-            return " ".join(texts).strip()
-
-        raise TypeError("prompt must be str or dict")
+        raise TypeError("prompt must be string or dict")
 
     @staticmethod
     def _default_output_path(prompt: str, size: str) -> str:
-        """
-        Generate safe default output filename.
-        """
-        safe_prompt = (
+        safe = (
             prompt[:60]
             .replace(" ", "_")
             .replace("/", "")
             .replace("\\", "")
-            .replace("'", "")
             .replace('"', "")
+            .replace("'", "")
         )
-
-        filename = f"t2v_{size}_{safe_prompt}.mp4"
+        filename = f"t2v_{size}_{safe}.mp4"
         return os.path.join(config.OUTPUT_DIR, filename)
-
-    @staticmethod
-    def _save_video(
-        frames,
-        output_path: str,
-        fps: int,
-    ) -> None:
-        """
-        Save frames to mp4 using imageio.
-        """
-        iio.imwrite(
-            output_path,
-            frames,
-            fps=fps,
-            codec="libx264",
-            quality=8,
-        )
