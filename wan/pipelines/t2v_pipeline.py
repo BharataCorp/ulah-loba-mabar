@@ -1,13 +1,13 @@
 # wan/pipelines/t2v_pipeline.py
 """
-WAN 2.2 Text-to-Video Pipeline (FINAL - Optimized & Chunked)
-===========================================================
+WAN 2.2 Text-to-Video Pipeline (FINAL - Cached Execution)
+========================================================
 
 Design:
-- Native WAN generate.py execution
-- VRAM-safe chunking (n × 4 + 1 frames)
-- GPU auto-optimization (TF32)
-- Suitable for RunPod / daemon workers
+- Single WAN generate.py invocation
+- Model cached inside generate.py
+- No subprocess loop
+- Compatible with RunPod
 """
 
 from __future__ import annotations
@@ -18,10 +18,7 @@ from typing import Union, Dict, Any
 
 from wan.logger import get_logger
 from wan import config
-from wan.utils.wan_chunker import (
-    split_duration_to_chunks,
-    seconds_to_wan_frames,
-)
+from wan.utils.wan_chunker import seconds_to_wan_frames
 from wan.utils.gpu_profile import (
     detect_gpu_profile,
     apply_global_optimizations,
@@ -31,9 +28,6 @@ _logger = get_logger("WAN.T2V")
 
 
 class T2VPipeline:
-    """
-    WAN 2.2 Text-to-Video Pipeline (chunked execution)
-    """
 
     @classmethod
     def generate(
@@ -46,12 +40,11 @@ class T2VPipeline:
     ) -> str:
 
         # --------------------------------------------------
-        # GPU AUTO OPTIMIZATION (ONCE)
+        # GPU optimization (process-level)
         # --------------------------------------------------
         profile = detect_gpu_profile()
         apply_global_optimizations(profile)
-
-        _logger.info(f"GPU profile detected: {profile}")
+        _logger.info(f"GPU profile: {profile}")
 
         # --------------------------------------------------
         # Validate input
@@ -81,68 +74,36 @@ class T2VPipeline:
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
         # --------------------------------------------------
-        # Split into WAN-safe chunks
+        # 🔥 SINGLE WAN INVOCATION (CACHE FRIENDLY)
         # --------------------------------------------------
-        chunks = split_duration_to_chunks(target_duration)
+        frame_num = seconds_to_wan_frames(target_duration)
 
-        _logger.info(
-            f"T2V chunking: total={target_duration}s -> {chunks}"
+        cmd = [
+            "python3", "generate.py",
+            "--task", "t2v-A14B",
+            "--ckpt_dir", config.MODEL_DIRS["t2v"],
+            "--prompt", prompt_text,
+            "--offload_model", "True",
+            "--convert_model_dtype",
+            "--size", size,
+            "--t5_cpu",
+            "--frame_num", str(frame_num),
+            "--sample_steps", str(sample_steps),
+            "--sample_shift", "10",
+            "--save_file", output_path,
+        ]
+
+        _logger.info("Executing WAN generate.py (single run)")
+        _logger.info(" ".join(cmd))
+
+        subprocess.run(
+            cmd,
+            cwd=config.WAN_ROOT,  # /workspace/Wan2.2
+            check=True,
         )
 
-        part_videos: list[str] = []
-
-        # --------------------------------------------------
-        # Execute WAN generate.py per chunk
-        # --------------------------------------------------
-        for idx, sec in enumerate(chunks):
-            frame_num = seconds_to_wan_frames(sec)
-
-            part_path = output_path.replace(
-                ".mp4", f"_part{idx + 1}.mp4"
-            )
-
-            cmd = [
-                "python3", "generate.py",
-                "--task", "t2v-A14B",
-                "--ckpt_dir", config.MODEL_DIRS["t2v"],
-                "--prompt", prompt_text,
-                "--offload_model", "True",
-                "--convert_model_dtype",
-                "--size", size,
-                "--t5_cpu",
-                "--frame_num", str(frame_num),
-                "--sample_steps", str(sample_steps),
-                "--sample_shift", "10",
-                "--save_file", part_path,
-            ]
-
-            _logger.info(
-                f"T2V chunk {idx + 1}: {sec}s "
-                f"({frame_num} frames)"
-            )
-            _logger.info(" ".join(cmd))
-
-            subprocess.run(
-                cmd,
-                cwd=config.WAN_ROOT,  # /workspace/Wan2.2
-                check=True,
-            )
-
-            if not os.path.exists(part_path):
-                raise RuntimeError(
-                    f"WAN failed to generate chunk {idx + 1}"
-                )
-
-            part_videos.append(part_path)
-
-        # --------------------------------------------------
-        # Concat chunks (lossless)
-        # --------------------------------------------------
-        if len(part_videos) == 1:
-            _logger.info("Single chunk, no concat needed")
-            return part_videos[0]
-
-        cls._concat_videos(part_videos, output_path)
+        if not os.path.exists(output_path):
+            raise RuntimeError("WAN T2V generation failed")
 
         _logger.info(f"T2V FINAL video saved: {output_path}")
         return output_path
@@ -185,24 +146,4 @@ class T2VPipeline:
         return os.path.join(
             config.OUTPUT_DIR,
             f"t2v_{size}_{safe}.mp4",
-        )
-
-    @staticmethod
-    def _concat_videos(parts: list[str], output: str):
-        txt = output.replace(".mp4", "_concat.txt")
-
-        with open(txt, "w") as f:
-            for p in parts:
-                f.write(f"file '{p}'\n")
-
-        subprocess.run(
-            [
-                "ffmpeg", "-y",
-                "-f", "concat",
-                "-safe", "0",
-                "-i", txt,
-                "-c", "copy",
-                output,
-            ],
-            check=True,
         )
