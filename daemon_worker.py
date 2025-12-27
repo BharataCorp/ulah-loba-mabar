@@ -37,7 +37,7 @@ STATUS_DIR.mkdir(exist_ok=True)
 # =====================================================
 # CONFIG
 # =====================================================
-RAM_LIMIT_GB = 120.0
+RAM_LIMIT_GB = 46
 CHECK_INTERVAL = 3
 
 # =====================================================
@@ -83,7 +83,7 @@ def main():
 
         # RAM CHECK
         mem = psutil.virtual_memory()
-        ram_gb = mem.used / 1024**3
+        ram_gb = gpu_mem_gb()
         if ram_gb > RAM_LIMIT_GB:
             log(f"RAM {ram_gb:.1f}GB > limit → draining")
             write_health("draining", False)
@@ -118,7 +118,7 @@ def main():
                 prompt=job["prompt"],
                 target_duration=job.get("duration", 5),
                 size=job["size"],
-                sample_steps=20,
+                sample_steps=16,
                 output_path=job["output"],
             )
 
@@ -137,8 +137,25 @@ def main():
             })
             log(f"Job {job_id} failed: {e}")
 
+        finally:
+            try:
+                import torch, gc
+                gc.collect()
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+                log("🧹 Post-job CUDA cleanup done")
+            except Exception:
+                pass
+
         job_file.unlink(missing_ok=True)
         write_health("idle", True)
+
+def gpu_mem_gb():
+    try:
+        import torch
+        return torch.cuda.memory_allocated() / 1024**3
+    except:
+        return 0
 
 if __name__ == "__main__":
     main()

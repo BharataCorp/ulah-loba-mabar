@@ -59,7 +59,7 @@ output = T2VPipeline.generate(
     prompt="A cinematic cat dancing on stage, dramatic lighting",
     target_duration=5,        # seconds
     size="832*480",
-    sample_steps=25,
+    sample_steps=16,
 )
 
 print("Video saved at:", output)
@@ -71,7 +71,7 @@ output = T2VPipeline.generate(
     prompt="A cinematic cat dancing on stage, dramatic lighting",
     target_duration=5,        # seconds
     size="832*480",
-    sample_steps=25,
+    sample_steps=16,
 )
 
 print("Video saved at:", output)

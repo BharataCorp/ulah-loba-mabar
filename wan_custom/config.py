@@ -52,8 +52,8 @@ MAX_DURATION_SECONDS = int(os.environ.get("WAN_MAX_DURATION", "30"))
 # PERFORMANCE DEFAULTS
 # =========================
 
-DEFAULT_SAMPLE_STEPS = int(os.environ.get("WAN_SAMPLE_STEPS", "20"))
-DEFAULT_SAMPLE_SHIFT = float(os.environ.get("WAN_SAMPLE_SHIFT", "8"))
+DEFAULT_SAMPLE_STEPS = int(os.environ.get("WAN_SAMPLE_STEPS", "16"))
+DEFAULT_SAMPLE_SHIFT = float(os.environ.get("WAN_SAMPLE_SHIFT", "10"))
 DEFAULT_GUIDE_SCALE = (3.0, 4.0)
 
 DEFAULT_SIZE = os.environ.get("WAN_DEFAULT_SIZE", "832*480")

@@ -23,6 +23,7 @@ from wan_custom.utils.gpu_profile import (
     detect_gpu_profile,
     apply_global_optimizations,
 )
+from generate import generate_in_process
 
 _logger = get_logger("wan_custom.T2V")
 
@@ -88,17 +89,28 @@ class T2VPipeline:
             "--t5_cpu",
             "--frame_num", str(frame_num),
             "--sample_steps", str(sample_steps),
-            "--sample_shift", "8",
+            "--sample_shift", "10",
             "--save_file", output_path,
         ]
 
         _logger.info("Executing WAN generate.py (single run)")
         _logger.info(" ".join(cmd))
 
-        subprocess.run(
-            cmd,
-            cwd=config.WAN_ROOT,  # /workspace/Wan2.2
-            check=True,
+        # subprocess.run(
+        #     cmd,
+        #     cwd=config.WAN_ROOT,  # /workspace/Wan2.2
+        #     check=True,
+        # )
+
+        generate_in_process(
+            task="t2v-A14B",
+            prompt=prompt_text,
+            ckpt_dir=config.MODEL_DIRS["t2v"],
+            size=size,
+            frame_num=str(frame_num),
+            save_file=output_path,
+            sample_steps=str(sample_steps),
+            sample_shift=str(10),
         )
 
         if not os.path.exists(output_path):

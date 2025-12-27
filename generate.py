@@ -37,8 +37,8 @@ def parse_args():
     p.add_argument("--frame_num", type=int, required=True)
     p.add_argument("--save_file", required=True)
 
-    p.add_argument("--sample_steps", type=int, default=20)
-    p.add_argument("--sample_shift", type=float, default=8)
+    p.add_argument("--sample_steps", type=int, default=16)
+    p.add_argument("--sample_shift", type=float, default=10)
     p.add_argument("--sample_guide_scale", type=float, default=1.0)
     p.add_argument("--base_seed", type=int, default=42)
 
@@ -100,31 +100,70 @@ def generate(args):
 
     logging.info("🎬 Generating video")
 
-    video = model.generate(
-        args.prompt,
-        size=SIZE_CONFIGS[args.size],
-        frame_num=args.frame_num,
-        shift=args.sample_shift,
-        sampling_steps=args.sample_steps,
-        guide_scale=args.sample_guide_scale,
-        seed=args.base_seed,
-        offload_model=False,
-    )
+    try:
+        video = model.generate(
+            args.prompt,
+            size=SIZE_CONFIGS[args.size],
+            frame_num=args.frame_num,
+            shift=args.sample_shift,
+            sampling_steps=args.sample_steps,
+            guide_scale=args.sample_guide_scale,
+            seed=args.base_seed,
+            offload_model=False,
+        )
 
-    logging.info(f"💾 Saving → {args.save_file}")
+        logging.info(f"💾 Saving → {args.save_file}")
 
-    save_video(
-        tensor=video[None],
-        save_file=args.save_file,
-        fps=16,
-        nrow=1,
-        normalize=True,
-        value_range=(-1, 1),
-    )
+        save_video(
+            tensor=video[None],
+            save_file=args.save_file,
+            fps=16,
+            nrow=1,
+            normalize=True,
+            value_range=(-1, 1),
+        )
 
-    torch.cuda.synchronize()
-    logging.info("✅ Done (model still cached)")
+        torch.cuda.synchronize()
+        logging.info("✅ Done")
 
+    finally:
+        # 🔒 OOM SAFETY (CRITICAL)
+        del video
+        gc.collect()
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize()
+        logging.info("🧹 CUDA cache cleaned (model preserved)")
+
+def generate_in_process(
+    task,
+    prompt,
+    ckpt_dir,
+    size,
+    frame_num,
+    save_file,
+    sample_steps=16,
+    sample_shift=10,
+    t5_cpu=True,
+    convert_model_dtype=True,
+):
+    class Args:
+        pass
+
+    args = Args()
+    args.task = task
+    args.prompt = prompt
+    args.ckpt_dir = ckpt_dir
+    args.size = size
+    args.frame_num = frame_num
+    args.save_file = save_file
+    args.sample_steps = sample_steps
+    args.sample_shift = sample_shift
+    args.sample_guide_scale = 1.0
+    args.base_seed = 42
+    args.t5_cpu = t5_cpu
+    args.convert_model_dtype = convert_model_dtype
+
+    generate(args)
 
 # ==========================================================
 # ENTRY
