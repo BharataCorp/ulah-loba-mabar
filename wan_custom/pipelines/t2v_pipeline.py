@@ -188,19 +188,22 @@ class T2VPipeline:
     # ==================================================
     @staticmethod
     def _extend_with_ffmpeg(
-        input_video: str,
-        output_video: str,
-        target_duration: int,
+            input_video: str,
+            output_video: str,
+            target_duration: int,
     ):
         """
-        Tuned for:
-        - low ghosting
-        - minimal blur
-        - cinematic smoothness
-        - affiliate product shots
+        Correct smart extend:
+        - Extend duration properly
+        - No ghosting
+        - No blur
+        - Affiliate-safe
         """
 
         vf = (
+            # 1. Freeze last frame to extend duration
+            f"tpad=stop_mode=clone:stop_duration={target_duration},"
+            # 2. Smooth motion (no new hallucination)
             "minterpolate="
             "fps=16:"
             "mi_mode=mci:"
