@@ -49,11 +49,17 @@ class T2VPipeline:
 
         chunk_outputs: List[str] = []
 
+        base_output = output_path  # final expected output
+        temp_dir = config.OUTPUT_DIR
+
         for idx, chunk_sec in enumerate(chunks):
             frame_num = seconds_to_wan_frames(chunk_sec)
 
-            chunk_out = output_path.replace(
-                ".mp4", f"_chunk{idx+1}.mp4"
+            chunk_out = os.path.join(
+                temp_dir,
+                os.path.basename(base_output).replace(
+                    ".mp4", f"_chunk{idx + 1}.mp4"
+                )
             )
 
             cmd = [
@@ -71,7 +77,7 @@ class T2VPipeline:
                 "--save_file", chunk_out,
             ]
 
-            _logger.info(f"[Chunk {idx+1}/{len(chunks)}] {' '.join(cmd)}")
+            _logger.info(f"[Chunk {idx + 1}/{len(chunks)}] {' '.join(cmd)}")
 
             subprocess.run(
                 cmd,
@@ -82,15 +88,17 @@ class T2VPipeline:
             chunk_outputs.append(chunk_out)
 
         # -----------------------------
-        # CONCAT VIDEO CHUNKS
+        # FINAL OUTPUT HANDLING
         # -----------------------------
         if len(chunk_outputs) == 1:
-            return chunk_outputs[0]
+            # 🔥 RENAME chunk → final output
+            os.replace(chunk_outputs[0], base_output)
+            _logger.info(f"Single chunk → saved as {base_output}")
+            return base_output
 
-        final_output = output_path
-        cls._concat_videos(chunk_outputs, final_output)
-
-        return final_output
+        # CONCAT for multi-chunk
+        cls._concat_videos(chunk_outputs, base_output)
+        return base_output
 
     # ==================================================
     # Helpers
