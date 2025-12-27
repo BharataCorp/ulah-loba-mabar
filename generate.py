@@ -15,8 +15,8 @@ import torch
 from PIL import Image
 
 from wan.text2video import WanT2V
-from wan_custom.configs import SIZE_CONFIGS, WAN_CONFIGS
-from wan_custom.utils.utils import save_video, str2bool
+from wan.config import SIZE_CONFIGS, WAN_CONFIGS
+from wan.utils.utils import save_video, str2bool
 
 # ==========================================================
 # GLOBAL STATE (PROCESS-LOCAL CACHE)
