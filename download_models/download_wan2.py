@@ -36,4 +36,7 @@ def download_all():
 
     print("ALL FILES DOWNLOADED")
 
+    # add file has_downloaded_models.txt to /workspace/Wan2.2/
+    with open(os.path.join(DEST, "has_downloaded_models.txt"), "w") as f:
+        f.write("Models downloaded successfully.\n")
 download_all()
