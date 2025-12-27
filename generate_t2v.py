@@ -1,49 +1,17 @@
 # generate_t2v.py
-from __future__ import annotations
 
 import argparse
 from wan_custom.pipelines.t2v_pipeline import T2VPipeline
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="WAN 2.2 Text-to-Video Generator (Optimized)"
-    )
-
-    parser.add_argument(
-        "--prompt",
-        type=str,
-        required=True,
-        help="Text prompt for video generation",
-    )
-
-    parser.add_argument(
-        "--target_duration",
-        type=int,
-        required=True,
-        help="Target duration in seconds",
-    )
-
-    parser.add_argument(
-        "--size",
-        type=str,
-        default=None,
-        help="Video resolution (e.g. 832*480)",
-    )
-
-    parser.add_argument(
-        "--output",
-        type=str,
-        default=None,
-        help="Output video path",
-    )
-
-    parser.add_argument(
-        "--sample_steps",
-        type=int,
-        default=None,
-        help="Sampling steps override",
-    )
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--prompt", required=True)
+    parser.add_argument("--target_duration", type=int, required=True)
+    parser.add_argument("--size", default="832*480")
+    parser.add_argument("--output", default=None)
+    parser.add_argument("--sample_steps", type=int, default=16)
+    parser.add_argument("--sample_shift", type=int, default=10)
 
     args = parser.parse_args()
 
@@ -52,11 +20,11 @@ def main():
         target_duration=args.target_duration,
         size=args.size,
         sample_steps=args.sample_steps,
+        sample_shift=args.sample_shift,
         output_path=args.output,
     )
 
-    print(f"\n=== T2V GENERATION COMPLETE ===")
-    print(f"Output: {out}")
+    print("Video saved to:", out)
 
 
 if __name__ == "__main__":

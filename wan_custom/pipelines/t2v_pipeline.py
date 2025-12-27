@@ -1,85 +1,96 @@
-# wan/pipelines/t2v_pipeline.py
-"""
-WAN 2.2 Text-to-Video Pipeline (FINAL - Cached Execution)
-========================================================
+# wan_custom/pipelines/t2v_pipeline.py
 
-Design:
-- Single WAN generate.py invocation
-- Model cached inside generate.py
-- No subprocess loop
-- Compatible with RunPod
-"""
+from __future__ import annotations
 import os
 import subprocess
-from typing import Union, Dict, Any
+from typing import Union, Dict, Any, List
 
-from wan_custom.logger import get_logger
 from wan_custom import config
-from wan_custom.utils.wan_chunker import seconds_to_wan_frames
-from wan_custom.utils.gpu_profile import (
-    detect_gpu_profile,
-    apply_global_optimizations,
+from wan_custom.logger import get_logger
+from wan_custom.utils.wan_chunker import (
+    split_duration_to_chunks,
+    seconds_to_wan_frames,
 )
 
 _logger = get_logger("wan_custom.T2V")
+
 
 class T2VPipeline:
 
     @classmethod
     def generate(
-            cls,
-            prompt: Union[str, Dict[str, Any]],
-            target_duration: int,
-            size: str | None = None,
-            sample_steps: int | None = None,
-            output_path: str | None = None,
+        cls,
+        prompt: Union[str, Dict[str, Any]],
+        target_duration: int,
+        size: str = "832*480",
+        sample_steps: int = 16,
+        sample_shift: int = 10,
+        output_path: str | None = None,
     ) -> str:
-
-        profile = detect_gpu_profile()
-        apply_global_optimizations(profile)
-        _logger.info(f"GPU profile: {profile}")
 
         prompt_text = cls._normalize_prompt(prompt)
         if not prompt_text:
             raise ValueError("Prompt is empty")
 
-        size = size or config.DEFAULT_SIZE
-        sample_steps = sample_steps or config.DEFAULT_SAMPLE_STEPS
+        if target_duration <= 0:
+            raise ValueError("target_duration must be > 0")
 
-        output_path = output_path or cls._default_output_path(prompt_text, size)
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        os.makedirs(config.OUTPUT_DIR, exist_ok=True)
 
-        frame_num = seconds_to_wan_frames(target_duration)
+        if output_path is None:
+            output_path = cls._default_output_path(prompt_text, size)
 
-        cmd = [
-            "python3", "generate.py",
-            "--task", "t2v-A14B",
-            "--ckpt_dir", config.MODEL_DIRS["t2v"],
-            "--prompt", prompt_text,
-            "--convert_model_dtype",
-            "--size", size,
-            "--offload_model", "True",
-            "--t5_cpu",
-            "--frame_num", str(frame_num),
-            "--sample_steps", str(sample_steps),
-            "--sample_shift", "10",
-            "--save_file", output_path,
-        ]
+        # -----------------------------
+        # WAN SAFE CHUNKING
+        # -----------------------------
+        chunks = split_duration_to_chunks(target_duration)
 
-        _logger.info("Executing WAN generate.py (subprocess mode)")
-        _logger.info(" ".join(cmd))
+        _logger.info(f"Splitting {target_duration}s into chunks: {chunks}")
 
-        subprocess.run(
-            cmd,
-            cwd=config.WAN_ROOT,
-            check=True,
-        )
+        chunk_outputs: List[str] = []
 
-        if not os.path.exists(output_path):
-            raise RuntimeError("WAN T2V generation failed")
+        for idx, chunk_sec in enumerate(chunks):
+            frame_num = seconds_to_wan_frames(chunk_sec)
 
-        _logger.info(f"T2V video saved: {output_path}")
-        return output_path
+            chunk_out = output_path.replace(
+                ".mp4", f"_chunk{idx+1}.mp4"
+            )
+
+            cmd = [
+                "python3", "generate.py",
+                "--task", "t2v-A14B",
+                "--ckpt_dir", config.MODEL_DIRS["t2v"],
+                "--prompt", prompt_text,
+                "--size", size,
+                "--frame_num", str(frame_num),
+                "--sample_steps", str(sample_steps),
+                "--sample_shift", str(sample_shift),
+                "--offload_model", "True",
+                "--t5_cpu",
+                "--convert_model_dtype",
+                "--save_file", chunk_out,
+            ]
+
+            _logger.info(f"[Chunk {idx+1}/{len(chunks)}] {' '.join(cmd)}")
+
+            subprocess.run(
+                cmd,
+                cwd=config.WAN_ROOT,
+                check=True,
+            )
+
+            chunk_outputs.append(chunk_out)
+
+        # -----------------------------
+        # CONCAT VIDEO CHUNKS
+        # -----------------------------
+        if len(chunk_outputs) == 1:
+            return chunk_outputs[0]
+
+        final_output = output_path
+        cls._concat_videos(chunk_outputs, final_output)
+
+        return final_output
 
     # ==================================================
     # Helpers
@@ -100,8 +111,11 @@ class T2VPipeline:
             texts = []
             for s in scenes:
                 actions = ", ".join(s.get("actions", []))
+                setting = s.get("setting", "")
                 mood = s.get("mood", "")
-                texts.append(f"{actions}. Mood: {mood}")
+                texts.append(
+                    f"{actions}. Setting: {setting}. Mood: {mood}"
+                )
             return " ".join(texts).strip()
 
         raise TypeError("prompt must be str or dict")
@@ -109,14 +123,33 @@ class T2VPipeline:
     @staticmethod
     def _default_output_path(prompt: str, size: str) -> str:
         safe = (
-            prompt[:60]
+            prompt[:50]
             .replace(" ", "_")
             .replace("/", "")
             .replace("\\", "")
-            .replace("'", "")
             .replace('"', "")
+            .replace("'", "")
         )
         return os.path.join(
             config.OUTPUT_DIR,
             f"t2v_{size}_{safe}.mp4",
+        )
+
+    @staticmethod
+    def _concat_videos(chunks: List[str], output: str):
+        list_file = output.replace(".mp4", ".txt")
+        with open(list_file, "w") as f:
+            for c in chunks:
+                f.write(f"file '{os.path.abspath(c)}'\n")
+
+        subprocess.run(
+            [
+                "ffmpeg", "-y",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", list_file,
+                "-c", "copy",
+                output,
+            ],
+            check=True,
         )
