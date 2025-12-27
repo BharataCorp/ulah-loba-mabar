@@ -106,7 +106,7 @@ class T2VPipeline:
             prompt=prompt_text,
             ckpt_dir=config.MODEL_DIRS["t2v"],
             size=size,
-            frame_num=str(frame_num),
+            frame_num=frame_num,
             save_file=output_path,
             sample_steps=sample_steps,
             sample_shift=10,
