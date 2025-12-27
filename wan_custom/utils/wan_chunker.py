@@ -12,7 +12,7 @@ from typing import List
 
 
 WAN_FPS = 16
-WAN_CHUNK_SECONDS = 5  # SAFE DEFAULT
+WAN_CHUNK_SECONDS = 6  # SAFE DEFAULT
 
 
 def seconds_to_wan_frames(seconds: int, fps: int = WAN_FPS) -> int:
