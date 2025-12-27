@@ -1,70 +1,21 @@
-"""
-WAN 2.2 Text-Image-to-Video (TI2V) Pipeline
-==========================================
+# wan_custom/pipelines/ti2v_pipeline.py
 
-- Loads WAN2.2 TI2V pipeline once
-- Supports string or structured JSON prompt
-- Requires a single input image
-- Supports target_duration (seconds)
-- Safe for long-running daemon usage
-"""
-
+from __future__ import annotations
 import os
-from typing import Union, Dict, Any
+import subprocess
+from typing import Union, Dict, Any, List
 
-import torch
-from diffusers import DiffusionPipeline
-from PIL import Image
-
-from wan_custom.pipelines.base_pipeline import BasePipeline
-from wan_custom.logger import get_logger
 from wan_custom import config
+from wan_custom.logger import get_logger
+from wan_custom.utils.wan_chunker import (
+    split_duration_to_chunks,
+    seconds_to_wan_frames,
+)
 
 _logger = get_logger("wan_custom.TI2V")
 
 
-class TI2VPipeline(BasePipeline):
-    """
-    WAN 2.2 Text-Image-to-Video Pipeline
-    """
-
-    @classmethod
-    def _load_pipeline(cls):
-        """
-        Load WAN2.2 TI2V model from local directory.
-        Called only once per process.
-        """
-        model_dir = config.MODEL_DIRS["ti2v"]
-
-        if not os.path.isdir(model_dir):
-            raise FileNotFoundError(
-                f"[WAN TI2V] Model directory not found: {model_dir}"
-            )
-
-        _logger.info(f"Loading WAN2.2 TI2V from {model_dir}")
-
-        pipe = DiffusionPipeline.from_pretrained(
-            model_dir,
-            torch_dtype=torch.bfloat16,
-            local_files_only=True,
-        )
-
-        if torch.cuda.is_available():
-            pipe = pipe.to("cuda")
-
-        if config.USE_OFFLOAD:
-            _logger.info("Enabling CPU offload for TI2V pipeline")
-            pipe.enable_model_cpu_offload()
-
-        if config.USE_CONVERT_DTYPE:
-            pipe.to(torch.bfloat16)
-
-        pipe.set_progress_bar_config(disable=False)
-        return pipe
-
-    # =============================
-    # PUBLIC API
-    # =============================
+class TI2VPipeline:
 
     @classmethod
     def generate(
@@ -72,123 +23,142 @@ class TI2VPipeline(BasePipeline):
         image_path: str,
         prompt: Union[str, Dict[str, Any]],
         target_duration: int,
-        size: str = None,
-        sample_steps: int = None,
-        sample_shift: float = None,
-        output_path: str = None,
+        size: str = "832*480",
+        sample_steps: int = 16,
+        sample_shift: int = 10,
+        output_path: str | None = None,
     ) -> str:
-        """
-        Generate video from text + image.
 
-        Args:
-            image_path: path to single input image
-            prompt: string or structured JSON
-            target_duration: seconds (converted to frame_num)
-            size: e.g. "832*480"
-            sample_steps: diffusion steps
-            sample_shift: motion shift
-            output_path: final mp4 path
+        if not os.path.exists(image_path):
+            raise FileNotFoundError(f"Image not found: {image_path}")
 
-        Returns:
-            output_path
-        """
-        cls.load()
+        prompt_text = cls._normalize_prompt(prompt)
+        if not prompt_text:
+            raise ValueError("Prompt is empty")
 
-        # -------- image validation --------
-        if not os.path.isfile(image_path):
-            raise FileNotFoundError(f"Input image not found: {image_path}")
+        if target_duration <= 0:
+            raise ValueError("target_duration must be > 0")
 
-        image = Image.open(image_path).convert("RGB")
+        os.makedirs(config.OUTPUT_DIR, exist_ok=True)
 
-        # -------- prompt handling --------
-        prompt_str = cls._normalize_prompt(prompt)
+        if output_path is None:
+            output_path = cls._default_output_path(prompt_text, size)
 
-        # -------- duration handling --------
-        if target_duration > config.MAX_DURATION_SECONDS:
-            raise ValueError(
-                f"target_duration exceeds limit ({config.MAX_DURATION_SECONDS}s)"
+        # -----------------------------
+        # WAN SAFE CHUNKING
+        # -----------------------------
+        chunks = split_duration_to_chunks(target_duration)
+        _logger.info(f"Splitting {target_duration}s into chunks: {chunks}")
+
+        chunk_outputs: List[str] = []
+        base_output = output_path
+        temp_dir = config.OUTPUT_DIR
+
+        for idx, chunk_sec in enumerate(chunks):
+            frame_num = seconds_to_wan_frames(chunk_sec)
+
+            chunk_out = os.path.join(
+                temp_dir,
+                os.path.basename(base_output).replace(
+                    ".mp4", f"_chunk{idx + 1}.mp4"
+                )
             )
 
-        frame_num = config.seconds_to_frames(target_duration)
+            cmd = [
+                "python3", "generate.py",
+                "--task", "ti2v-5B",
+                "--ckpt_dir", config.MODEL_DIRS["ti2v"],
+                "--prompt", prompt_text,
+                "--image", image_path,
+                "--size", size,
+                "--frame_num", str(frame_num),
+                "--sample_steps", str(sample_steps),
+                "--sample_shift", str(sample_shift),
+                "--offload_model", "True",
+                "--t5_cpu",
+                "--convert_model_dtype",
+                "--save_file", chunk_out,
+            ]
 
-        # -------- size handling --------
-        size = size or config.DEFAULT_SIZE
-        config.validate_size(size)
-        width, height = map(int, size.split("*"))
+            _logger.info(f"[Chunk {idx + 1}/{len(chunks)}] {' '.join(cmd)}")
 
-        # -------- inference params --------
-        sample_steps = sample_steps or config.DEFAULT_SAMPLE_STEPS
-        sample_shift = sample_shift or config.DEFAULT_SAMPLE_SHIFT
-
-        output_path = output_path or cls._default_output_path(
-            prompt_str, size
-        )
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-
-        _logger.info(
-            f"Generating TI2V | duration={target_duration}s "
-            f"frames={frame_num} size={size}"
-        )
-
-        # -------- inference --------
-        with torch.no_grad():
-            result = cls._pipeline(
-                prompt=prompt_str,
-                image=image,
-                num_frames=frame_num,
-                height=height,
-                width=width,
-                num_inference_steps=sample_steps,
-                sample_shift=sample_shift,
+            subprocess.run(
+                cmd,
+                cwd=config.WAN_ROOT,
+                check=True,
             )
 
-        video_frames = result.frames
+            chunk_outputs.append(chunk_out)
 
-        # -------- save video --------
-        cls._pipeline.save_video(video_frames, output_path)
+        # -----------------------------
+        # FINAL OUTPUT HANDLING
+        # -----------------------------
+        if len(chunk_outputs) == 1:
+            os.replace(chunk_outputs[0], base_output)
+            _logger.info(f"Single chunk → saved as {base_output}")
+            return base_output
 
-        _logger.info(f"TI2V video saved to {output_path}")
+        cls._concat_videos(chunk_outputs, base_output)
+        return base_output
 
-        cls.clear_cuda()
-        return output_path
-
-    # =============================
-    # INTERNAL HELPERS
-    # =============================
+    # ==================================================
+    # Helpers
+    # ==================================================
 
     @staticmethod
-    def _normalize_prompt(prompt: Union[str, Dict[str, Any]]) -> str:
-        """
-        Convert JSON prompt to WAN-friendly string.
-        """
+    def _normalize_prompt(
+        prompt: Union[str, Dict[str, Any]]
+    ) -> str:
         if isinstance(prompt, str):
             return prompt.strip()
 
         if isinstance(prompt, dict):
             if "prompt_for_wan_one_ti2v" in prompt:
-                return prompt["prompt_for_wan_one_ti2v"].strip()
-
-            if "prompt_for_wan_one_t2v" in prompt:
-                return prompt["prompt_for_wan_one_t2v"].strip()
+                return str(prompt["prompt_for_wan_one_ti2v"]).strip()
 
             scenes = prompt.get("scenes", [])
-            scene_texts = []
+            texts = []
             for s in scenes:
                 actions = ", ".join(s.get("actions", []))
+                setting = s.get("setting", "")
                 mood = s.get("mood", "")
-                scene_texts.append(f"{actions}. Mood: {mood}")
+                texts.append(
+                    f"{actions}. Setting: {setting}. Mood: {mood}"
+                )
+            return " ".join(texts).strip()
 
-            return " ".join(scene_texts)
-
-        raise TypeError("Prompt must be string or dict")
+        raise TypeError("prompt must be str or dict")
 
     @staticmethod
     def _default_output_path(prompt: str, size: str) -> str:
-        safe_prompt = (
-            prompt[:60]
+        safe = (
+            prompt[:50]
             .replace(" ", "_")
             .replace("/", "")
+            .replace("\\", "")
+            .replace('"', "")
             .replace("'", "")
         )
-        filename = f"ti2v_{size}_{safe_prompt}.mp4"
-        return os.path.join(config.OUTPUT_DIR, filename)
+        return os.path.join(
+            config.OUTPUT_DIR,
+            f"ti2v_{size}_{safe}.mp4",
+        )
+
+    @staticmethod
+    def _concat_videos(chunks: List[str], output: str):
+        list_file = output.replace(".mp4", ".txt")
+        with open(list_file, "w") as f:
+            for c in chunks:
+                f.write(f"file '{os.path.abspath(c)}'\n")
+
+        subprocess.run(
+            [
+                "ffmpeg", "-y",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", list_file,
+                "-c", "copy",
+                output,
+            ],
+            check=True,
+        )
