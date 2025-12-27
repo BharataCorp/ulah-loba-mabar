@@ -41,6 +41,7 @@ def parse_args():
     p.add_argument("--sample_shift", type=float, default=10)
     p.add_argument("--sample_guide_scale", type=float, default=1.0)
     p.add_argument("--base_seed", type=int, default=42)
+    p.add_argument("--Offload_model", type=str2bool, default=False)
 
     p.add_argument("--t5_cpu", action="store_true")
     p.add_argument("--convert_model_dtype", action="store_true")
