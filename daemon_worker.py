@@ -5,6 +5,13 @@ import logging
 import psutil
 from datetime import datetime
 from pathlib import Path
+import sys
+
+BASE_DIR = Path(__file__).resolve().parent
+CUSTOM_WAN_DIR = BASE_DIR / "wan_custom"
+
+if str(CUSTOM_WAN_DIR) not in sys.path:
+    sys.path.insert(0, str(CUSTOM_WAN_DIR.parent))
 
 # =====================================================
 # BASIC LOGGER (NO WAN DEPENDENCY)
@@ -36,7 +43,7 @@ CHECK_INTERVAL = 3
 # =====================================================
 # IMPORT WAN PIPELINE (CRITICAL FIX)
 # =====================================================
-from wan.pipelines.t2v_pipeline import T2VPipeline
+from wan_custom.pipelines.t2v_pipeline import T2VPipeline
 
 # =====================================================
 # HEALTH
