@@ -14,7 +14,7 @@ warnings.filterwarnings("ignore")
 import torch
 from PIL import Image
 
-from wan_custom.text2video import WanT2V
+from wan.text2video import WanT2V
 from wan_custom.configs import SIZE_CONFIGS, WAN_CONFIGS
 from wan_custom.utils.utils import save_video, str2bool
 

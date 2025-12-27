@@ -109,8 +109,8 @@ class T2VPipeline:
             size=size,
             frame_num=str(frame_num),
             save_file=output_path,
-            sample_steps=str(sample_steps),
-            sample_shift=str(10),
+            sample_steps=sample_steps,
+            sample_shift=10,
         )
 
         if not os.path.exists(output_path):
