@@ -97,8 +97,9 @@ def generate(args):
     init_logging()
 
     model = get_model(args)
-
     logging.info("🎬 Generating video")
+
+    video = None  # ✅ WAJIB: define sebelum try
 
     try:
         video = model.generate(
@@ -127,12 +128,15 @@ def generate(args):
         logging.info("✅ Done")
 
     finally:
-        # 🔒 OOM SAFETY (CRITICAL)
-        del video
+        # 🔒 SAFE CUDA CLEANUP
+        if video is not None:
+            del video
+
         gc.collect()
         torch.cuda.empty_cache()
         torch.cuda.synchronize()
-        logging.info("🧹 CUDA cache cleaned (model preserved)")
+
+        logging.info("🧹 CUDA cache cleaned (safe)")
 
 def generate_in_process(
     task,
