@@ -58,7 +58,8 @@ class T2VPipeline:
             "--prompt", prompt_text,
             "--convert_model_dtype",
             "--size", size,
-            ""
+            "--offload_model", "True",
+            "--t5_cpu",
             "--frame_num", str(frame_num),
             "--sample_steps", str(sample_steps),
             "--sample_shift", "10",
