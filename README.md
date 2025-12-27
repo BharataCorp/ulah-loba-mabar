@@ -286,5 +286,48 @@ pip3 install -r requirements.txt --extra-index-url https://download.pytorch.org/
 
 
 
-## USage Job
-python3 submit_job.py --prompt "A cinematic morning scene in a cozy pastel baby room: a young mother in a pastel hijab gently applies Locare Body Lotion to her laughing baby boy's arm. Soft natural light fills the room, showcasing the creamy lotion texture and baby's smooth skin. Close-up of mother's caring smile, baby's chubby cheeks, and Locare lotion bottle. Warm, loving atmosphere, 4K quality, clean details, smooth motion, no glitches. End with mother holding up the Locare bottle to the camera, baby waving happily" --target_duration 5 --size 832*480 --output /workspace/Wan2.2/output_videos/final_5min.mp4
+## Usage test manual
+### T2V Generate test manual
+```bash
+ python3 generate_t2v.py   --prompt "A cinematic morning scene in a cozy pastel baby room: a young mother in a pastel hijab gently applies Locare Body Lotion to her laughing baby boy's arm. Soft natural light fills the room, showcasing the creamy lotion texture and baby's smooth skin. Close-up of mother's caring smile, baby's chubby cheeks, and Locare lotion bottle. Warm, loving atmosphere, 4K quality, clean details, smooth motion, no glitches. End with mother holding up the Locare bottle to the camera, baby waving happily"   --target_duration 5   --size 480*832   --sample_steps 8 --sample_shift 8 --output output_videos/sample_step8_sample_8_potrait.mp4
+```
+
+### I2V Generate test manual
+```bash
+ python3 generate_i2v.py \
+  --image assets/product.jpg \
+  --prompt "A cinematic product reveal, soft lighting" \
+  --target_duration 5 \
+  --size 832*480
+```
+
+```bash
+prompt_json = {
+    "scenes": [
+        {
+            "actions": ["Produk muncul di tengah frame", "Slow zoom ke logo"],
+            "setting": "studio minimalis",
+            "mood": "premium"
+        }
+    ],
+    "prompt_for_wan_one_i2v": (
+        "A premium cinematic product showcase, "
+        "soft reflections, clean background"
+    )
+}
+
+```
+
+
+### TI2V Generate test manual
+```bash
+ python3 generate_ti2v.py \
+  --image assets/product.jpg \
+  --prompt "A cinematic product showcase with soft lighting" \
+  --target_duration 5 \
+  --size 832*480
+```
+
+
+
+
