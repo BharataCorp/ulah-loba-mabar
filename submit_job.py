@@ -72,7 +72,7 @@ def main():
         "frame_num": frame_num,
         "size": args.size,
         "output": args.output,
-        "sample_steps": 8,
+        "sample_steps": 20,
         "seed": 42,
         "submitted_at": datetime.utcnow().isoformat(),
     }
