@@ -32,6 +32,10 @@ MODEL_DIRS = {
 OUTPUT_DIR = os.environ.get("WAN_OUTPUT_DIR", os.path.join(WAN_ROOT, "output_videos"))
 LOG_DIR = os.environ.get("WAN_LOG_DIR", os.path.join(WAN_ROOT, "logs"))
 
+RIFE_BIN = "/workspace/rife/rife-ncnn-vulkan"
+RIFE_MODEL_DIR = "/workspace/rife/model/rife-v4.25"
+
+
 
 # =========================
 # GENERATION LIMITS
