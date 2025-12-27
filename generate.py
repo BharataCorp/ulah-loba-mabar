@@ -164,6 +164,7 @@ def generate_in_process(
     args.sample_shift = sample_shift
     args.sample_guide_scale = 1.0
     args.base_seed = 42
+    args.t5_cpu = False
     args.convert_model_dtype = convert_model_dtype
 
     generate(args)
