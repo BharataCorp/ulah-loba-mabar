@@ -118,7 +118,7 @@ def main():
                 prompt=job["prompt"],
                 target_duration=job.get("duration", 5),
                 size=job["size"],
-                sample_steps=8,
+                sample_steps=20,
                 output_path=job["output"],
             )
 

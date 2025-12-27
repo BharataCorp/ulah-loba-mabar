@@ -88,7 +88,7 @@ class T2VPipeline:
             "--t5_cpu",
             "--frame_num", str(frame_num),
             "--sample_steps", str(sample_steps),
-            "--sample_shift", "10",
+            "--sample_shift", "8",
             "--save_file", output_path,
         ]
 
