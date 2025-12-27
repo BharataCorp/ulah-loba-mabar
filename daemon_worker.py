@@ -3,7 +3,6 @@ import json
 import time
 import logging
 import psutil
-import subprocess
 from datetime import datetime
 from pathlib import Path
 
@@ -35,6 +34,11 @@ RAM_LIMIT_GB = 120.0
 CHECK_INTERVAL = 3
 
 # =====================================================
+# IMPORT WAN PIPELINE (CRITICAL FIX)
+# =====================================================
+from wan.pipelines.t2v_pipeline import T2VPipeline
+
+# =====================================================
 # HEALTH
 # =====================================================
 def write_health(state, ready):
@@ -61,6 +65,11 @@ def write_status(job_id, payload):
 # =====================================================
 def main():
     log("Starting WAN daemon worker")
+
+    # 🔥 LOAD MODEL ONCE (THIS IS THE FIX)
+    log("Loading WAN T2V pipeline ONCE")
+    T2VPipeline.load()
+
     write_health("idle", True)
 
     while True:
@@ -100,24 +109,21 @@ def main():
         })
 
         try:
-            cmd = [
-                "python3", "generate.py",
-                "--task", "t2v-A14B",
-                "--ckpt_dir", "Wan2.2-T2V-A14B",
-                "--prompt", job["prompt"],
-                "--size", job["size"],
-                "--frame_num", str(job["frame_num"]),
-                "--sample_steps", "4",
-                "--sample_shift", "10",
-                "--save_file", job["output"],
-            ]
+            log("Executing T2V pipeline (IN-PROCESS)")
 
-            log("Executing generate.py")
-            subprocess.run(cmd, check=True)
+            output_path = T2VPipeline.generate(
+                prompt=job["prompt"],
+                target_duration=job.get("duration", 5),
+                size=job["size"],
+                sample_steps=4,
+                sample_shift=10,
+                output_path=job["output"],
+            )
 
             write_status(job_id, {
                 "state": "done",
                 "progress": 100,
+                "output": output_path,
                 "finished_at": datetime.utcnow().isoformat(),
             })
             log(f"Job {job_id} finished")
@@ -131,6 +137,9 @@ def main():
 
         job_file.unlink(missing_ok=True)
         write_health("idle", True)
+
+        # 🔒 OPTIONAL: clear CUDA cache between jobs
+        T2VPipeline.clear_cuda()
 
 if __name__ == "__main__":
     main()
