@@ -147,7 +147,7 @@ def generate_in_process(
     save_file,
     sample_steps=16,
     sample_shift=10,
-    t5_cpu=True,
+    t5_cpu=False,
     convert_model_dtype=True,
 ):
     class Args:
@@ -164,7 +164,6 @@ def generate_in_process(
     args.sample_shift = sample_shift
     args.sample_guide_scale = 1.0
     args.base_seed = 42
-    args.t5_cpu = t5_cpu
     args.convert_model_dtype = convert_model_dtype
 
     generate(args)
