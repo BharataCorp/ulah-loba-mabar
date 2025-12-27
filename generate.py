@@ -37,8 +37,8 @@ def parse_args():
     p.add_argument("--frame_num", type=int, required=True)
     p.add_argument("--save_file", required=True)
 
-    p.add_argument("--sample_steps", type=int, default=4)
-    p.add_argument("--sample_shift", type=float, default=10)
+    p.add_argument("--sample_steps", type=int, default=8)
+    p.add_argument("--sample_shift", type=float, default=8)
     p.add_argument("--sample_guide_scale", type=float, default=1.0)
     p.add_argument("--base_seed", type=int, default=42)
 
