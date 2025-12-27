@@ -16,15 +16,15 @@ from typing import Union, Dict, Any
 
 import torch
 
-from wan.pipelines.base_pipeline import BasePipeline
-from wan.logger import get_logger
-from wan import config
-from wan.utils.duration import seconds_to_frames
-from wan.utils.prompt_parser import normalize_prompt
+from wan_custom.pipelines.base_pipeline import BasePipeline
+from wan_custom.logger import get_logger
+from wan_custom import config
+from wan_custom.utils.duration import seconds_to_frames
+from wan_custom.utils.prompt_parser import normalize_prompt
 
 import wan  # official WAN package (from Wan2.2 repo)
 
-_logger = get_logger("WAN.S2V")
+_logger = get_logger("wan_custom.S2V")
 
 
 class S2VPipeline(BasePipeline):
@@ -52,7 +52,7 @@ class S2VPipeline(BasePipeline):
         _logger.info(f"Loading WAN2.2 S2V from {model_dir}")
 
         # WAN S2V uses WanS2V wrapper (NOT DiffusionPipeline directly)
-        pipeline = wan.WanS2V(
+        pipeline = wan_custom.WanS2V(
             ckpt_dir=model_dir,
             offload_model=config.USE_OFFLOAD,
             convert_model_dtype=config.USE_CONVERT_DTYPE,

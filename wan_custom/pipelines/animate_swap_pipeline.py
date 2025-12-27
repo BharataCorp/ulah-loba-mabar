@@ -12,10 +12,10 @@ import os
 import subprocess
 from typing import Optional
 
-from wan.logger import get_logger
-from wan import config
+from wan_custom.logger import get_logger
+from wan_custom import config
 
-_logger = get_logger("WAN.AnimateSwap")
+_logger = get_logger("wan_custom.AnimateSwap")
 
 
 class AnimateSwapPipeline:

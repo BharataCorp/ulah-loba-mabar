@@ -2,7 +2,7 @@ import time
 
 import requests
 import os
-from wan.config import BASE_API_URL_MABAR, MABAR_POD_ID, KEY_MANAGEMENT_ID
+from wan_custom.config import BASE_API_URL_MABAR, MABAR_POD_ID, KEY_MANAGEMENT_ID
 
 # create function with param method, url, headers=None, data=None:
 class Requests:

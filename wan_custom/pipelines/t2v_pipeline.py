@@ -16,15 +16,15 @@ import os
 import subprocess
 from typing import Union, Dict, Any
 
-from wan.logger import get_logger
-from wan import config
-from wan.utils.wan_chunker import seconds_to_wan_frames
-from wan.utils.gpu_profile import (
+from wan_custom.logger import get_logger
+from wan_custom import config
+from wan_custom.utils.wan_chunker import seconds_to_wan_frames
+from wan_custom.utils.gpu_profile import (
     detect_gpu_profile,
     apply_global_optimizations,
 )
 
-_logger = get_logger("WAN.T2V")
+_logger = get_logger("wan_custom.T2V")
 
 
 class T2VPipeline:

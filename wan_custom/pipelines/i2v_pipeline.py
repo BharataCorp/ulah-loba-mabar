@@ -20,11 +20,11 @@ import imageio.v3 as iio
 from PIL import Image
 from diffusers import DiffusionPipeline
 
-from wan.pipelines.base_pipeline import BasePipeline
-from wan.logger import get_logger
-from wan import config
+from wan_custom.pipelines.base_pipeline import BasePipeline
+from wan_custom.logger import get_logger
+from wan_custom import config
 
-_logger = get_logger("WAN.I2V")
+_logger = get_logger("wan_custom.I2V")
 
 
 class I2VPipeline(BasePipeline):

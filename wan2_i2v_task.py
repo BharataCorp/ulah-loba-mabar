@@ -2,7 +2,7 @@
 from services.http_clients import Requests
 import boto3
 import os
-from wan.config import BASE_API_URL_MABAR
+from wan_custom.config import BASE_API_URL_MABAR
 import json
 
 while True:

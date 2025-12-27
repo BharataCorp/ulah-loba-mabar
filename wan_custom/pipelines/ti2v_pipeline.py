@@ -16,11 +16,11 @@ import torch
 from diffusers import DiffusionPipeline
 from PIL import Image
 
-from wan.pipelines.base_pipeline import BasePipeline
-from wan.logger import get_logger
-from wan import config
+from wan_custom.pipelines.base_pipeline import BasePipeline
+from wan_custom.logger import get_logger
+from wan_custom import config
 
-_logger = get_logger("WAN.TI2V")
+_logger = get_logger("wan_custom.TI2V")
 
 
 class TI2VPipeline(BasePipeline):

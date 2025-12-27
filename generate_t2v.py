@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import argparse
-from wan.pipelines.t2v_pipeline import T2VPipeline
+from wan_custom.pipelines.t2v_pipeline import T2VPipeline
 
 
 def main():

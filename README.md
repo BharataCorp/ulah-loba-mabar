@@ -52,7 +52,7 @@ export NUMEXPR_NUM_THREADS=6
 #### T2V Usage
 Note :
 > makesure to import 
-> ```from wan.pipelines.t2v_pipeline import T2VPipeline```
+> ```from wan_custom.pipelines.t2v_pipeline import T2VPipeline```
 
 ```bash
 output = T2VPipeline.generate(
@@ -107,7 +107,7 @@ output = T2VPipeline.generate(
 #### I2V Usage
 Note :
 > makesure to import 
-> ```from wan.pipelines.i2v_pipeline import I2VPipeline```
+> ```from wan_custom.pipelines.i2v_pipeline import I2VPipeline```
 > Also prepare input image path
 > 
 
@@ -153,13 +153,13 @@ output = I2VPipeline.generate(
 #### TI2V Usage
 Note :
 > makesure to import 
-> ```from wan.pipelines.ti2v_pipeline import TI2VPipeline```
+> ```from wan_custom.pipelines.ti2v_pipeline import TI2VPipeline```
 > Also prepare input text and image path
 >
 
 ##### Example Prompt String(Simple)
 ```bash
-from wan.pipelines.ti2v_pipeline import TI2VPipeline
+from wan_custom.pipelines.ti2v_pipeline import TI2VPipeline
 
 output = TI2VPipeline.generate(
     image_path="assets/product.jpg",
@@ -178,7 +178,7 @@ export OMP_NUM_THREADS=6
 export MKL_NUM_THREADS=6
 export NUMEXPR_NUM_THREADS=6
 
-from wan.pipelines.animate_pipeline import AnimatePipeline
+from wan_custom.pipelines.animate_pipeline import AnimatePipeline
 
 output = AnimatePipeline.generate(
     reference_image="assets/character.png",
@@ -191,7 +191,7 @@ print("Saved:", output)
 
 #### Animate Swap Usage
 ```bash
-from wan.pipelines.animate_swap_pipeline import AnimateSwapPipeline
+from wan_custom.pipelines.animate_swap_pipeline import AnimateSwapPipeline
 
 output = AnimateSwapPipeline.generate(
     source_video="input/video.mp4",
@@ -206,7 +206,7 @@ export OMP_NUM_THREADS=8
 export MKL_NUM_THREADS=8
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
-from wan.pipelines.mass_animate_pipeline import MassAnimatePipeline
+from wan_custom.pipelines.mass_animate_pipeline import MassAnimatePipeline
 
 video_path = "/workspace/videos/master_video.mp4"
 
@@ -232,7 +232,7 @@ print(results)
 #### S2V Usage
 Note :
 > makesure to import 
-> ```from wan.pipelines.s2v_pipeline import S2VPipeline```
+> ```from wan_custom.pipelines.s2v_pipeline import S2VPipeline```
 
 ```bash
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
@@ -243,7 +243,7 @@ export OMP_NUM_THREADS=8
 export MKL_NUM_THREADS=8
 export NUMEXPR_NUM_THREADS=8
 
-from wan.pipelines.s2v_pipeline import S2VPipeline
+from wan_custom.pipelines.s2v_pipeline import S2VPipeline
 
 output = S2VPipeline.generate(
     prompt="A cheerful mother talking to her baby",
