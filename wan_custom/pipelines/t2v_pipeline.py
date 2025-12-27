@@ -16,12 +16,16 @@ _logger = get_logger("wan_custom.T2V")
 
 
 class T2VPipeline:
+    """
+    FINAL T2V PIPELINE (RUNPOD SAFE)
 
-    # =========================
-    # SMART EXTEND CONSTANTS
-    # =========================
-    WAN_BASE_SECONDS = 5
-    FFMPEG_MAX_EXTEND = 3
+    Strategy:
+    - <= 5s  : WAN only
+    - 5–15s  : WAN 5s + ffmpeg smart extend (NO RIFE)
+    - > 15s  : WAN chunk (legacy, safe)
+    """
+
+    SAFE_WAN_SECONDS = 5
     MAX_SMART_EXTEND_SECONDS = 15
 
     @classmethod
@@ -50,13 +54,12 @@ class T2VPipeline:
             output_path = cls._default_output_path(prompt_text, size)
 
         # ==================================================
-        # SMART EXTEND MODE
+        # SMART EXTEND MODE (DEFAULT)
         # ==================================================
         if smart_extend:
-
-            # --- Case 1: WAN only ---
-            if target_duration <= cls.WAN_BASE_SECONDS:
-                _logger.info("smart_extend: WAN only")
+            # --- case 1: fully safe ---
+            if target_duration <= cls.SAFE_WAN_SECONDS:
+                _logger.info("Duration within safe WAN range")
                 return cls._generate_with_chunks(
                     prompt_text,
                     target_duration,
@@ -66,62 +69,50 @@ class T2VPipeline:
                     output_path,
                 )
 
+            # --- base WAN clip (5s) ---
+            _logger.info(
+                f"Smart extend: WAN base {cls.SAFE_WAN_SECONDS}s"
+            )
             base_output = output_path.replace(".mp4", "_base.mp4")
 
             cls._generate_with_chunks(
                 prompt_text,
-                cls.WAN_BASE_SECONDS,
+                cls.SAFE_WAN_SECONDS,
                 size,
                 sample_steps,
                 sample_shift,
                 base_output,
             )
 
-            remain = target_duration - cls.WAN_BASE_SECONDS
-
-            # --- Case 2: FFmpeg extend ---
-            if remain <= cls.FFMPEG_MAX_EXTEND:
-                _logger.info(f"smart_extend: FFmpeg extend {remain}s")
-                cls._extend_ffmpeg(
+            # --- extend with ffmpeg ---
+            if target_duration <= cls.MAX_SMART_EXTEND_SECONDS:
+                _logger.info(
+                    f"Smart extend via ffmpeg to {target_duration}s"
+                )
+                cls._extend_with_ffmpeg(
                     base_output,
                     output_path,
                     target_duration,
                 )
                 return output_path
 
-            # --- Case 3: RIFE extend ---
-            if target_duration <= cls.MAX_SMART_EXTEND_SECONDS:
-                _logger.info(f"smart_extend: RIFE extend to {target_duration}s")
-                cls._extend_rife(
-                    base_output,
-                    output_path,
-                )
-                return output_path
-
-            # --- Case 4: Fallback chunk ---
-            _logger.warning("smart_extend: fallback to chunk")
-
-            mid_output = output_path.replace(".mp4", "_extended.mp4")
-            cls._extend_rife(base_output, mid_output)
-
-            tail_seconds = target_duration - cls.MAX_SMART_EXTEND_SECONDS
-            tail_output = output_path.replace(".mp4", "_tail.mp4")
-
-            cls._generate_with_chunks(
+            # --- fallback: chunk ---
+            _logger.warning(
+                "Duration too long, fallback to WAN chunk mode"
+            )
+            return cls._generate_with_chunks(
                 prompt_text,
-                tail_seconds,
+                target_duration,
                 size,
                 sample_steps,
                 sample_shift,
-                tail_output,
+                output_path,
             )
 
-            cls._concat_videos([mid_output, tail_output], output_path)
-            return output_path
-
         # ==================================================
-        # LEGACY MODE
+        # PURE CHUNK MODE (LEGACY)
         # ==================================================
+        _logger.info("smart_extend disabled → pure WAN chunk")
         return cls._generate_with_chunks(
             prompt_text,
             target_duration,
@@ -132,7 +123,7 @@ class T2VPipeline:
         )
 
     # ==================================================
-    # WAN GENERATION (UNCHANGED)
+    # WAN CHUNK GENERATION (UNCHANGED CORE FLOW)
     # ==================================================
     @classmethod
     def _generate_with_chunks(
@@ -146,11 +137,20 @@ class T2VPipeline:
     ) -> str:
 
         chunks = split_duration_to_chunks(target_duration)
-        chunk_outputs: List[str] = []
+        _logger.info(f"Splitting {target_duration}s into chunks: {chunks}")
 
-        for idx, sec in enumerate(chunks):
-            frame_num = seconds_to_wan_frames(sec)
-            chunk_out = output_path.replace(".mp4", f"_chunk{idx+1}.mp4")
+        chunk_outputs: List[str] = []
+        temp_dir = config.OUTPUT_DIR
+
+        for idx, chunk_sec in enumerate(chunks):
+            frame_num = seconds_to_wan_frames(chunk_sec)
+
+            chunk_out = os.path.join(
+                temp_dir,
+                os.path.basename(output_path).replace(
+                    ".mp4", f"_chunk{idx + 1}.mp4"
+                )
+            )
 
             cmd = [
                 "python3", "generate.py",
@@ -167,7 +167,13 @@ class T2VPipeline:
                 "--save_file", chunk_out,
             ]
 
-            subprocess.run(cmd, cwd=config.WAN_ROOT, check=True)
+            _logger.info(f"[Chunk {idx + 1}/{len(chunks)}]")
+            subprocess.run(
+                cmd,
+                cwd=config.WAN_ROOT,
+                check=True,
+            )
+
             chunk_outputs.append(chunk_out)
 
         if len(chunk_outputs) == 1:
@@ -178,48 +184,65 @@ class T2VPipeline:
         return output_path
 
     # ==================================================
-    # EXTEND METHODS
+    # FFmpeg SMART EXTEND (ANTI-GHOSTING, ANTI-BLUR)
     # ==================================================
     @staticmethod
-    def _extend_ffmpeg(input_video: str, output_video: str, duration: int):
+    def _extend_with_ffmpeg(
+        input_video: str,
+        output_video: str,
+        target_duration: int,
+    ):
+        """
+        Tuned for:
+        - low ghosting
+        - minimal blur
+        - cinematic smoothness
+        - affiliate product shots
+        """
+
+        vf = (
+            "minterpolate="
+            "fps=16:"
+            "mi_mode=mci:"
+            "mc_mode=aobmc:"
+            "me_mode=bidir:"
+            "vsbmc=1"
+        )
+
         cmd = [
             "ffmpeg", "-y",
             "-i", input_video,
-            "-vf",
-            "minterpolate=fps=16:mi_mode=mci:mc_mode=aobmc:me_mode=bidir",
-            "-t", str(duration),
+            "-vf", vf,
+            "-t", str(target_duration),
+            "-pix_fmt", "yuv420p",
+            "-movflags", "+faststart",
             output_video,
         ]
-        subprocess.run(cmd, check=True)
 
-    @staticmethod
-    def _extend_rife(input_video: str, output_video: str):
-        cmd = [
-            config.RIFE_BIN,
-            "-i", input_video,
-            "-o", output_video,
-            "-m", config.RIFE_MODEL_DIR,
-            "-n", "2",
-        ]
         subprocess.run(cmd, check=True)
 
     # ==================================================
     # HELPERS
     # ==================================================
     @staticmethod
-    def _normalize_prompt(prompt: Union[str, Dict[str, Any]]) -> str:
+    def _normalize_prompt(
+        prompt: Union[str, Dict[str, Any]]
+    ) -> str:
         if isinstance(prompt, str):
             return prompt.strip()
 
         if isinstance(prompt, dict):
             if "prompt_for_wan_one_t2v" in prompt:
                 return str(prompt["prompt_for_wan_one_t2v"]).strip()
+
+            scenes = prompt.get("scenes", [])
             texts = []
-            for s in prompt.get("scenes", []):
+            for s in scenes:
+                actions = ", ".join(s.get("actions", []))
+                setting = s.get("setting", "")
+                mood = s.get("mood", "")
                 texts.append(
-                    f"{', '.join(s.get('actions', []))}. "
-                    f"Setting: {s.get('setting', '')}. "
-                    f"Mood: {s.get('mood', '')}"
+                    f"{actions}. Setting: {setting}. Mood: {mood}"
                 )
             return " ".join(texts).strip()
 
@@ -227,8 +250,18 @@ class T2VPipeline:
 
     @staticmethod
     def _default_output_path(prompt: str, size: str) -> str:
-        safe = prompt[:50].replace(" ", "_").replace("/", "")
-        return os.path.join(config.OUTPUT_DIR, f"t2v_{size}_{safe}.mp4")
+        safe = (
+            prompt[:50]
+            .replace(" ", "_")
+            .replace("/", "")
+            .replace("\\", "")
+            .replace('"', "")
+            .replace("'", "")
+        )
+        return os.path.join(
+            config.OUTPUT_DIR,
+            f"t2v_{size}_{safe}.mp4",
+        )
 
     @staticmethod
     def _concat_videos(chunks: List[str], output: str):
@@ -238,6 +271,13 @@ class T2VPipeline:
                 f.write(f"file '{os.path.abspath(c)}'\n")
 
         subprocess.run(
-            ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", list_file, "-c", "copy", output],
+            [
+                "ffmpeg", "-y",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", list_file,
+                "-c", "copy",
+                output,
+            ],
             check=True,
         )
