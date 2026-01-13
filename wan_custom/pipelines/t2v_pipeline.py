@@ -72,7 +72,7 @@ class T2VPipeline:
                 "--sample_steps", str(sample_steps),
                 "--sample_shift", str(sample_shift),
                 "--offload_model", "True",
-                "--t5_cpu",
+                # "--t5_cpu",
                 "--convert_model_dtype",
                 "--save_file", scene_out,
             ]
