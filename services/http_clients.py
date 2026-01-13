@@ -8,7 +8,7 @@ from wan_custom.config import BASE_API_URL_MABAR, MABAR_POD_ID, KEY_MANAGEMENT_I
 # create function with param method, url, headers=None, data=None:
 class Requests:
     @staticmethod
-    def request(method, url, headers=None, data=None):
+    def request(method, url, headers=None, data=None, **kwargs):
         try:
             if headers is None:
                 headers = {
@@ -16,7 +16,8 @@ class Requests:
                     "Accept": "application/json",
                 }
 
-            response = requests.request(method, url, headers=headers, data=data)
+            # Forward additional kwargs (e.g., timeout) to requests.request
+            response = requests.request(method, url, headers=headers, data=data, **kwargs)
             response.raise_for_status()  # Raise an error for bad responses (4xx and 5xx)
             return response
 
@@ -144,8 +145,9 @@ class Requests:
                 print(f"Failed to send log, status code: {response.status_code}")
                 raise ValueError(f"Failed to send log, status code: {response.status_code}")
         except Exception as e:
+            # Do not terminate the pod on logging failure; print and return.
             print(f"Error occurred while sending log: {e}")
-            os._exit(0)
+            return
 
     @staticmethod
     def set_failed(wan_t2v_id, failed_reason: str):
@@ -175,7 +177,8 @@ class Requests:
                 raise ValueError(f"Failed to set WAN T2V ID {wan_t2v_id} to failed, status code: {response.status_code}")
         except Exception as e:
             print(f"Error occurred while setting WAN T2V ID {wan_t2v_id} to failed: {e}")
-            os._exit(0)
+            # Do not terminate the pod; return to caller.
+            return
 
     @staticmethod
     def set_item_failed(wan_t2v_id, wan_t2v_item_id, failed_reason: str):
@@ -205,6 +208,5 @@ class Requests:
                 raise ValueError(f"Failed to set WAN T2V Item ID {wan_t2v_item_id} to failed, status code: {response.status_code}")
         except Exception as e:
             print(f"Error occurred while setting WAN T2V Item ID {wan_t2v_item_id} to failed: {e}")
-            os._exit(0)
-
-
+            # Do not terminate the pod; return to caller.
+            return
