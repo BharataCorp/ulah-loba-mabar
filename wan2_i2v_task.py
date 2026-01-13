@@ -14,7 +14,7 @@ while True:
         # Create request to BASE_URL_MABAR + "/api/v2/wan2_i2v_task/waiting" with method GET
         response = Requests.request(
             method="GET",
-            url=f"{BASE_API_URL_MABAR}/api/v2/wan2_i2v_task/waiting",
+            url=f"{BASE_API_URL_MABAR}",
         )
 
         if response.status_code != 200:
