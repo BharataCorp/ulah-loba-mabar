@@ -221,6 +221,9 @@ def main():
                 continue
 
             wan_t2v_id = wan_t2v.get("id")
+            product_reference_name = wan_t2v.get("product_reference_name", "")
+            product_prompt_description = wan_t2v.get("product_prompt_description", "")
+            characters = wan_t2v.get("characters", [])
             items = wan_t2v.get("items") or []
             if not items:
                 Requests.set_failed(wan_t2v_id, "Tidak ada item untuk diproses dalam tugas.")

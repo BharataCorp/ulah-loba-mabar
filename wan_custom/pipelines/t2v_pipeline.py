@@ -33,7 +33,10 @@ class T2VPipeline:
     def generate(
         cls,
         scenes: List[Dict[str, Any]],
-        target_duration: int,
+        product_reference_name : str = "",
+        product_prompt_description : str = "",
+        characters : List[Dict[str, Any]] = [],
+        target_duration: int = 5,
         size: str = "832*480",
         sample_steps: int = 10,
         sample_shift: int = 10,
@@ -55,7 +58,24 @@ class T2VPipeline:
             if duration > cls.SAFE_WAN_SECONDS:
                 scene["duration"] = cls.SAFE_WAN_SECONDS
 
+            introduce_prompt = "";
+
+            # check if have product reference name, if have generate prompt with product_reference_name and have shape description is product_prompt_description
+            if product_reference_name != "" and product_prompt_description != "":
+                introduce_prompt += f"Product: {product_reference_name} Description: {product_prompt_description}. "
+
+
+            # check if have characters to add to prompt , structure of characters is [{character_name: str, character_gender: MALE|FEMALE,  character_description: str}]
+            for character in characters:
+                character_name = character.get("character_name","")
+                character_gender = character.get("character_gender","")
+                character_description = character.get("character_description","")
+
+                if character_name != "" and character_description != "":
+                    introduce_prompt += f"Character: {character_name} Gender: {character_gender}. Description: {character_description}. \n "
+
             prompt = scene.get("prompt", "")
+            prompt = introduce_prompt + prompt
 
             scene_out = os.path.join(
                 temp_dir,
