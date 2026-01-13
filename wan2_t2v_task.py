@@ -130,6 +130,8 @@ def _cleanup_local_files(final_output: str):
 
 
 def main():
+    print(f"Pod {MABAR_POD_ID} starting WAN T2V worker.")
+
     Requests.send_log(
         f"Pod {MABAR_POD_ID} is starting WAN T2V worker.",
         "startup",
@@ -154,6 +156,14 @@ def main():
                 method="GET",
                 url=f"{BASE_API_URL_MABAR}/runpod_pod/{MABAR_POD_ID}/wan_t2v/ready_to_process"
             )
+
+            print(f"Pod {MABAR_POD_ID} received response with status code: {getattr(resp, 'status_code', None)}")
+
+            # print for json response if available
+            try:
+                print(f"Response JSON: {resp.json()}")
+            except Exception:
+                pass
 
             # If we got here without exception, reset consecutive error counter
             consecutive_errors = 0
