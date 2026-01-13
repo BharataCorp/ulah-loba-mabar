@@ -83,6 +83,9 @@ class T2VPipeline:
             scene_outputs.append(scene_out)
 
         # concatenate all scenes into final output
+        print("Combining all scenes into final video...")
+        print(f"Scene outputs: {output_path}")
+
         if output_path is None:
             output_path = cls._default_output_path("combined_scenes", size)
         cls._concat_videos(scene_outputs, output_path)
