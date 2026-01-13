@@ -32,106 +32,61 @@ class T2VPipeline:
     @classmethod
     def generate(
         cls,
-        prompt: Union[str, Dict[str, Any]],
+        scenes: List[Dict[str, Any]],
         target_duration: int,
         size: str = "832*480",
         sample_steps: int = 10,
         sample_shift: int = 10,
         output_path: str | None = None,
     ) -> str:
-
-        prompt_text = cls._normalize_prompt(prompt)
-        if not prompt_text:
-            raise ValueError("Prompt is empty")
-
         if target_duration <= 0:
             raise ValueError("target_duration must be > 0")
 
+        # create directory config.OUTPUT_DIR if not exists
         os.makedirs(config.OUTPUT_DIR, exist_ok=True)
 
-        if output_path is None:
-            output_path = cls._default_output_path(prompt_text, size)
-
-        chunks = split_duration_to_chunks(target_duration)
-        _logger.info(f"Splitting {target_duration}s into chunks: {chunks}")
-
-        chunk_outputs: List[str] = []
+        scene_outputs: List[str] = []
         temp_dir = config.OUTPUT_DIR
 
-        for idx, chunk_sec in enumerate(chunks):
-            frame_num = seconds_to_wan_frames(chunk_sec)
+        # loop over scenes to create prompt text
+        for scene in scenes:
+            duration = scene.get("duration",5);
+            # change duration if greather than 5, maximum safe seconds
+            if duration > cls.SAFE_WAN_SECONDS:
+                scene["duration"] = cls.SAFE_WAN_SECONDS
 
-            # 🔥 FAST MODE for chunk > 1
-            if idx == 0:
-                steps = sample_steps
-                shift = sample_shift
-                _logger.info("Chunk 1 → cinematic mode")
-            else:
-                steps = cls.FAST_SAMPLE_STEPS
-                shift = cls.FAST_SAMPLE_SHIFT
-                _logger.info("Chunk tail → FAST mode")
+            prompt = scene.get("prompt", "")
 
-            chunk_out = os.path.join(
+            scene_out = os.path.join(
                 temp_dir,
-                os.path.basename(output_path).replace(
-                    ".mp4", f"_chunk{idx + 1}.mp4"
-                )
+                f"t2v_scene_{len(scene_outputs) + 1}.mp4"
             )
 
             cmd = [
                 "python3", "generate.py",
                 "--task", "t2v-A14B",
                 "--ckpt_dir", config.MODEL_DIRS["t2v"],
-                "--prompt", prompt_text,
+                "--prompt", prompt,
                 "--size", size,
-                "--frame_num", str(frame_num),
-                "--sample_steps", str(steps),
-                "--sample_shift", str(shift),
+                "--frame_num", str(seconds_to_wan_frames(scene["duration"])),
+                "--sample_steps", str(sample_steps),
+                "--sample_shift", str(sample_shift),
                 "--offload_model", "True",
                 "--t5_cpu",
                 "--convert_model_dtype",
-                "--save_file", chunk_out,
+                "--save_file", scene_out,
             ]
 
-            _logger.info(f"[Chunk {idx + 1}/{len(chunks)}] steps={steps} shift={shift}")
+            _logger.info(f"Generating scene with prompt: {prompt}")
             subprocess.run(cmd, cwd=config.WAN_ROOT, check=True)
 
-            chunk_outputs.append(chunk_out)
+            scene_outputs.append(scene_out)
 
-        # ===== FINAL OUTPUT =====
-        if len(chunk_outputs) == 1:
-            os.replace(chunk_outputs[0], output_path)
-            return output_path
-
-        cls._concat_videos(chunk_outputs, output_path)
+        # concatenate all scenes into final output
+        if output_path is None:
+            output_path = cls._default_output_path("combined_scenes", size)
+        cls._concat_videos(scene_outputs, output_path)
         return output_path
-
-    # ==================================================
-    # HELPERS
-    # ==================================================
-    @staticmethod
-    def _normalize_prompt(
-        prompt: Union[str, Dict[str, Any]]
-    ) -> str:
-        if isinstance(prompt, str):
-            return prompt.strip()
-
-        if isinstance(prompt, dict):
-            if "prompt_for_wan_one_t2v" in prompt:
-                return str(prompt["prompt_for_wan_one_t2v"]).strip()
-
-            scenes = prompt.get("scenes", [])
-            texts = []
-            for s in scenes:
-                actions = ", ".join(s.get("actions", []))
-                setting = s.get("setting", "")
-                mood = s.get("mood", "")
-                texts.append(
-                    f"{actions}. Setting: {setting}. Mood: {mood}"
-                )
-            return " ".join(texts).strip()
-
-        raise TypeError("prompt must be str or dict")
 
     @staticmethod
     def _default_output_path(prompt: str, size: str) -> str:

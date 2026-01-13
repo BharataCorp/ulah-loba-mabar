@@ -1,3 +1,4 @@
+import json
 import time
 
 import requests
@@ -7,7 +8,7 @@ from wan_custom.config import BASE_API_URL_MABAR, MABAR_POD_ID, KEY_MANAGEMENT_I
 # create function with param method, url, headers=None, data=None:
 class Requests:
     @staticmethod
-    def request(method, url, headers=None, data=None):
+    def request(method, url, headers=None, data=None, **kwargs):
         try:
             if headers is None:
                 headers = {
@@ -15,7 +16,8 @@ class Requests:
                     "Accept": "application/json",
                 }
 
-            response = requests.request(method, url, headers=headers, data=data)
+            # Forward additional kwargs (e.g., timeout) to requests.request
+            response = requests.request(method, url, headers=headers, data=data, **kwargs)
             response.raise_for_status()  # Raise an error for bad responses (4xx and 5xx)
             return response
 
@@ -104,3 +106,107 @@ class Requests:
         except Exception as e:
             print(f"Error occurred while sending pod delete request: {e}")
             os._exit(0)
+
+    @staticmethod
+    def send_log(
+        title: str,
+        step: str,
+        message: str,
+        data: dict = None,
+    ):
+        if not BASE_API_URL_MABAR:
+            print("BASE_URL_MABAR not set, cannot send log via API.")
+            return
+
+        payload = {
+            "title": title,
+            "step": step,
+            "message": message,
+            "data": data or {},
+            "pod_id": MABAR_POD_ID,
+            "key_management_id": KEY_MANAGEMENT_ID,
+        }
+
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+
+        try:
+            response = Requests.request(
+                method="POST",
+                url=f"{BASE_API_URL_MABAR}/runpod_log/{MABAR_POD_ID}",
+                headers=headers,
+                data=json.dumps(payload),
+            )
+            if response.status_code == 200:
+                print("Log sent successfully.")
+            else:
+                print(f"Failed to send log, status code: {response.status_code}")
+                raise ValueError(f"Failed to send log, status code: {response.status_code}")
+        except Exception as e:
+            # Do not terminate the pod on logging failure; print and return.
+            print(f"Error occurred while sending log: {e}")
+            return
+
+    @staticmethod
+    def set_failed(wan_t2v_id, failed_reason: str):
+        if not BASE_API_URL_MABAR:
+            print("BASE_URL_MABAR not set, cannot set failed status via API.")
+            return
+
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+
+        data = json.dumps({"failed_reason": failed_reason})
+
+        try:
+            response = Requests.request(
+                method="POST",
+                url=f"{BASE_API_URL_MABAR}/wan_one_t2v/processing/{wan_t2v_id}/processing_failed",
+                headers=headers,
+                data=data,
+            )
+
+            if response.status_code == 200:
+                print(f"WAN T2V ID {wan_t2v_id} set to failed successfully.")
+            else:
+                print(f"Failed to set WAN T2V ID {wan_t2v_id} to failed, status code: {response.status_code}")
+                raise ValueError(f"Failed to set WAN T2V ID {wan_t2v_id} to failed, status code: {response.status_code}")
+        except Exception as e:
+            print(f"Error occurred while setting WAN T2V ID {wan_t2v_id} to failed: {e}")
+            # Do not terminate the pod; return to caller.
+            return
+
+    @staticmethod
+    def set_item_failed(wan_t2v_id, wan_t2v_item_id, failed_reason: str):
+        if not BASE_API_URL_MABAR:
+            print("BASE_URL_MABAR not set, cannot set item failed status via API.")
+            return
+
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+
+        data = json.dumps({"failed_reason": failed_reason})
+
+        try:
+            response = Requests.request(
+                method="POST",
+                url=f"{BASE_API_URL_MABAR}/wan_one_t2v/processing/{wan_t2v_id}/item/{wan_t2v_item_id}/processing_failed",
+                headers=headers,
+                data=data,
+            )
+
+            if response.status_code == 200:
+                print(f"WAN T2V Item ID {wan_t2v_item_id} set to failed successfully.")
+            else:
+                print(f"Failed to set WAN T2V Item ID {wan_t2v_item_id} to failed, status code: {response.status_code}")
+                raise ValueError(f"Failed to set WAN T2V Item ID {wan_t2v_item_id} to failed, status code: {response.status_code}")
+        except Exception as e:
+            print(f"Error occurred while setting WAN T2V Item ID {wan_t2v_item_id} to failed: {e}")
+            # Do not terminate the pod; return to caller.
+            return
