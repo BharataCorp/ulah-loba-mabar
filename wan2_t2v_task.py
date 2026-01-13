@@ -348,7 +348,7 @@ def main():
                 except Exception:
                     unixtime_stamp = int(time.time())
 
-                s3_base_path = "WAN_T2V/videos/"
+                s3_base_path = "WAN_T2V/videos"
                 file_name = f"wan_t2v_{wan_t2v_id}_item_{wan_t2v_item_id}_{unixtime_stamp}.mp4"
 
                 try:
