@@ -236,9 +236,11 @@ def main():
 
             success_generate_item = 0
 
+            upload_s3_hostname = wan_t2v.get("upload_s3_hostname")
+
             # Validate S3 params once
             upload_s3_bucket = wan_t2v.get("upload_s3_bucket")
-            upload_s3_endpoint = wan_t2v.get("upload_s3_endpoint")
+            upload_s3_endpoint =  "https://" + upload_s3_hostname
             upload_s3_access_key = wan_t2v.get("upload_s3_access_key")
             upload_s3_secret_key = wan_t2v.get("upload_s3_secret_key")
 
