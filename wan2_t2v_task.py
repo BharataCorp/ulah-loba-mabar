@@ -160,8 +160,10 @@ def main():
             print(f"Pod {MABAR_POD_ID} received response with status code: {getattr(resp, 'status_code', None)}")
 
             # print for json response if available
+            # avoid printing full response JSON (may contain sensitive credentials)
             try:
-                print(f"Response JSON: {resp.json()}")
+                _ = resp.json()
+                print(f"Pod {MABAR_POD_ID} received a JSON response (redacted).")
             except Exception:
                 pass
 
@@ -250,7 +252,13 @@ def main():
 
             # Validate S3 params once
             upload_s3_bucket = wan_t2v.get("upload_s3_bucket")
-            upload_s3_endpoint =  "https://" + upload_s3_hostname
+            # Build endpoint safely: prefer explicit endpoint, otherwise use hostname if present
+            if wan_t2v.get("upload_s3_endpoint"):
+                upload_s3_endpoint = wan_t2v.get("upload_s3_endpoint")
+            elif upload_s3_hostname:
+                upload_s3_endpoint = "https://" + str(upload_s3_hostname)
+            else:
+                upload_s3_endpoint = None
             upload_s3_access_key = wan_t2v.get("upload_s3_access_key")
             upload_s3_secret_key = wan_t2v.get("upload_s3_secret_key")
 
@@ -265,7 +273,16 @@ def main():
                 wan_t2v_item_id = item.get("id")
                 order_index = item.get("order_index")
                 storyboard_raw = item.get("storyboard_data")
-                target_duration = int(item.get("duration", 10))
+
+                # Normalize item duration safely (handle None or string values)
+                raw_item_duration = item.get("duration")
+                if raw_item_duration is None:
+                    target_duration = 10
+                else:
+                    try:
+                        target_duration = int(raw_item_duration)
+                    except Exception:
+                        target_duration = 10
 
                 if not storyboard_raw:
                     Requests.set_item_failed(wan_t2v_id, wan_t2v_item_id, "storyboard data kosong.")
@@ -280,6 +297,19 @@ def main():
                 if not scenes:
                     Requests.set_item_failed(wan_t2v_id, wan_t2v_item_id, "Tidak ada scene prompt dalam storyboard data.")
                     continue
+
+                # Normalize each scene duration to int (handle strings like "5" and None)
+                for s_idx, sc in enumerate(scenes):
+                    raw_d = sc.get("duration", 5)
+                    try:
+                        d_int = int(raw_d)
+                    except Exception:
+                        # fallback to 5 seconds if conversion fails
+                        d_int = 5
+                    # enforce minimum 1 second
+                    if d_int <= 0:
+                        d_int = 1
+                    sc["duration"] = d_int
 
                 Requests.send_log(
                     f"Pod {MABAR_POD_ID} processing WAN T2V ID {wan_t2v_id} item {wan_t2v_item_id} (order {order_index}).",
