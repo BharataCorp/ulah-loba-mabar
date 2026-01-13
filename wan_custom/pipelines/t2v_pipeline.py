@@ -58,7 +58,7 @@ class T2VPipeline:
             if duration > cls.SAFE_WAN_SECONDS:
                 scene["duration"] = cls.SAFE_WAN_SECONDS
 
-            introduce_prompt = "";
+            introduce_prompt = ""
 
             # check if have product reference name, if have generate prompt with product_reference_name and have shape description is product_prompt_description
             if product_reference_name != "" and product_prompt_description != "":
@@ -75,7 +75,7 @@ class T2VPipeline:
                     introduce_prompt += f"Character: {character_name} Gender: {character_gender}. Description: {character_description}. \n "
 
             prompt = scene.get("prompt", "")
-            prompt = introduce_prompt + prompt
+            prompt = introduce_prompt + " Prompt:" +prompt
 
             scene_out = os.path.join(
                 temp_dir,
