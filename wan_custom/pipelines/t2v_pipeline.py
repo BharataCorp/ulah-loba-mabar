@@ -50,7 +50,7 @@ class T2VPipeline:
 
         # loop over scenes to create prompt text
         for scene in scenes:
-            duration = scene.get("duration",5);
+            duration = scene.get("duration",5)
             # change duration if greather than 5, maximum safe seconds
             if duration > cls.SAFE_WAN_SECONDS:
                 scene["duration"] = cls.SAFE_WAN_SECONDS
