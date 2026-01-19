@@ -5,6 +5,7 @@ import os
 import subprocess
 from typing import Union, Dict, Any, List
 
+from services.http_clients import Requests
 from wan_custom import config
 from wan_custom.logger import get_logger
 from wan_custom.utils.wan_chunker import (
@@ -77,6 +78,13 @@ class T2VPipeline:
             prompt = scene.get("prompt", "")
             prompt = introduce_prompt + " Prompt:" +prompt
 
+            Requests.send_log(
+                title=f"Generating T2V scene duration: {scene['duration']}s",
+                step=f"Generating T2V",
+                message= f"Prompt: {prompt}",
+                data=scene
+            )
+
             scene_out = os.path.join(
                 temp_dir,
                 f"t2v_scene_{len(scene_outputs) + 1}.mp4"
@@ -105,6 +113,13 @@ class T2VPipeline:
         # concatenate all scenes into final output
         print("Combining all scenes into final video...")
         print(f"Scene outputs: {output_path}")
+
+        Requests.send_log(
+            title="Combining all scenes into final video",
+            step="Combining Scenes",
+            message="Combining all scene outputs into final video.",
+            data={"scene_outputs": scene_outputs}
+        )
 
         if output_path is None:
             output_path = cls._default_output_path("combined_scenes", size)

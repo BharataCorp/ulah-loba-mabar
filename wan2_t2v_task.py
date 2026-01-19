@@ -34,8 +34,7 @@ def handle_sigterm(signum, frame):
     try:
         Requests.stop_pod()
     except Exception:
-        pass
-    sys.exit(0)
+        sys.exit(0)
 
 
 signal.signal(signal.SIGTERM, handle_sigterm)
@@ -53,8 +52,7 @@ except Exception:
             f"Could not create OUTPUT_DIR {OUTPUT_DIR}."
         )
     except Exception:
-        pass
-    sys.exit(1)
+        sys.exit(1)
 
 
 def safe_request(method: str, url: str, **kwargs):
@@ -90,13 +88,13 @@ def stop_pod_and_exit(message: str):
     print(message)
     try:
         Requests.send_log(message, "shutdown", message)
+        # Requests.stop_pod()
     except Exception:
         pass
     try:
         Requests.stop_pod()
     except Exception:
-        pass
-    sys.exit(0)
+        sys.exit(0)
 
 
 def _cleanup_local_files(final_output: str):
@@ -225,6 +223,7 @@ def main():
             product_prompt_description = wan_t2v.get("product_prompt_description", "")
             characters = wan_t2v.get("characters", [])
             items = wan_t2v.get("items") or []
+
             if not items:
                 Requests.set_failed(wan_t2v_id, "Tidak ada item untuk diproses dalam tugas.")
                 time.sleep(POLL_INTERVAL_SECONDS)
@@ -329,6 +328,9 @@ def main():
                         target_duration=target_duration,
                         size=size,
                         output_path=output_path,
+                        product_reference_name=product_reference_name,
+                        product_prompt_description=product_prompt_description,
+                        characters=characters
                     )
                 except Exception as gen_err:
                     Requests.set_item_failed(wan_t2v_id, wan_t2v_item_id, f"Gagal generate: {gen_err}")

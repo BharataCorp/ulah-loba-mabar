@@ -63,7 +63,7 @@ class Requests:
         try:
             response = Requests.request(
                 method="POST",
-                url=f"{BASE_API_URL_MABAR}/runpod_pod/stop/{MABAR_POD_ID}/key_management/{KEY_MANAGEMENT_ID}",
+                url=f"{BASE_API_URL_MABAR}/runpod_pod/{MABAR_POD_ID}/key_management/{KEY_MANAGEMENT_ID}/stop",
             )
             if response.status_code == 200:
                 print("Pod stop request sent successfully, exiting pod.")
@@ -90,7 +90,7 @@ class Requests:
         try:
             response = Requests.request(
                 method="POST",
-                url=f"{BASE_API_URL_MABAR}/runpod_pod/terminate/{MABAR_POD_ID}/key_management/{KEY_MANAGEMENT_ID}",
+                url=f"{BASE_API_URL_MABAR}/runpod_pod/{MABAR_POD_ID}/key_management/{KEY_MANAGEMENT_ID}/terminate",
             )
             if response.status_code == 200:
                 print("Pod delete request sent successfully.")
@@ -208,5 +208,34 @@ class Requests:
                 raise ValueError(f"Failed to set WAN T2V Item ID {wan_t2v_item_id} to failed, status code: {response.status_code}")
         except Exception as e:
             print(f"Error occurred while setting WAN T2V Item ID {wan_t2v_item_id} to failed: {e}")
+            # Do not terminate the pod; return to caller.
+            return
+
+    @staticmethod
+    def set_runner_task(step_runner_task: str):
+        if not BASE_API_URL_MABAR:
+            print("BASE_URL_MABAR not set, cannot set runner task via API.")
+            return
+
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+
+        try:
+            response = Requests.request(
+                method="POST",
+                url=f"{BASE_API_URL_MABAR}/runpod_pod/{MABAR_POD_ID}/set_runner_task",
+                headers=headers,
+                data=json.dumps({"step_runner_task": step_runner_task})
+            )
+
+            if response.status_code == 200:
+                print(f"Runner task set successfully for Pod ID {MABAR_POD_ID}.")
+            else:
+                print(f"Failed to set runner task for Pod ID {MABAR_POD_ID}, status code: {response.status_code}")
+                raise ValueError(f"Failed to set runner task for Pod ID {MABAR_POD_ID}, status code: {response.status_code}")
+        except Exception as e:
+            print(f"Error occurred while setting runner task for Pod ID {MABAR_POD_ID}: {e}")
             # Do not terminate the pod; return to caller.
             return
