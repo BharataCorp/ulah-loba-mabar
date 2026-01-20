@@ -330,7 +330,9 @@ def main():
                         output_path=output_path,
                         product_reference_name=product_reference_name,
                         product_prompt_description=product_prompt_description,
-                        characters=characters
+                        characters=characters,
+                        sample_steps=14,
+                        sample_shift=10,
                     )
                 except Exception as gen_err:
                     Requests.set_item_failed(wan_t2v_id, wan_t2v_item_id, f"Gagal generate: {gen_err}")
